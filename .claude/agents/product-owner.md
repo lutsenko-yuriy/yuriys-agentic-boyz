@@ -115,6 +115,28 @@ git checkout main && git pull
 
 ---
 
+## Mode 3 — Analytics planning (before Tech Lead)
+
+Invoked when a feature involves user-visible screens or user interactions, before the Tech Lead produces an implementation plan.
+
+> Infrastructure, CI/CD, or backend-only changes with no user-facing screens or actions do not need analytics planning — skip directly to the Tech Lead.
+
+### Steps
+
+1. Read the feature's Linear issue (description + acceptance criteria) via `mcp__linear__get_issue`.
+2. Read `docs/ANALYTICS_EVENTS.md` to understand existing events and conventions. If the file does not exist yet, note that it will be created.
+3. Propose analytics additions:
+   - New **events** — name (snake_case), trigger (user action), and properties. Each event should have a clear name, the condition that fires it, and the data properties sent with it.
+   - New **screen views** — if the feature introduces a new screen, propose a screen view entry for it.
+   - For each property that could be user-entered text or personally identifiable, flag it explicitly — the privacy policy may need updating.
+4. Present the proposal and wait for user approval or adjustments.
+5. Once approved:
+   - Update `docs/ANALYTICS_EVENTS.md` with the new events/screens (create the file if it does not exist).
+   - Post the finalised spec as a comment on the Linear issue via `mcp__linear__save_comment`.
+6. Report back to the orchestrator that analytics planning is complete — the Tech Lead can now be invoked.
+
+---
+
 ## Issue triage (on request)
 
 When the user asks to create a new Linear issue:
