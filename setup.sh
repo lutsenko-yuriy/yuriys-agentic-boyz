@@ -47,30 +47,64 @@ ARCHITECTURE_SUMMARY=$(ask "One-line architecture summary (e.g. Vertical-slice w
 CODE_STYLE=$(ask "Code style reference (e.g. 'Flutter style guide' or 'Airbnb JS')" "Project conventions")
 
 echo ""
-echo "── Linear ───────────────────────────────────────"
-echo "Find these in your Linear workspace settings and project URL."
+echo "── Project management tool ──────────────────────"
+echo "This is the tool where issues, milestones, and the backlog live."
+echo "Examples: Linear, Jira, GitHub Issues, GitLab Issues, Shortcut"
 echo ""
-LINEAR_WORKSPACE_NAME=$(ask "Linear workspace name")
-LINEAR_TEAM_ID=$(ask "Linear team ID (UUID)")
-LINEAR_PROJECT_ID=$(ask "Linear project ID (UUID)")
-LINEAR_ISSUE_PREFIX=$(ask "Linear issue prefix (e.g. HAB, APP, PROJ)")
-LINEAR_PROJECT_URL=$(ask "Linear project URL (https://linear.app/...)" "https://linear.app")
+PM_TOOL=$(ask "PM tool name (e.g. Linear)")
+ISSUE_PREFIX=$(ask "Issue identifier prefix (e.g. HAB, APP, PROJ — leave blank for tools like GitHub Issues that use numbers)" "")
+PM_PROJECT_URL=$(ask "PM project URL (link to the board / backlog)" "")
+
+echo ""
+echo "── Experiment tracking ──────────────────────────"
+echo "Tool used to run A/B tests or feature flags."
+echo "Examples: Firebase A/B Testing, Statsig, LaunchDarkly, PostHog"
+echo ""
+EXPERIMENT_TOOL=$(ask "Experiment tool name" "Firebase A/B Testing")
+
+echo ""
+echo "── Git host ─────────────────────────────────────"
+echo "Where pull requests / merge requests live."
+echo "Examples: GitHub, GitLab, Bitbucket"
+echo ""
+GIT_HOST=$(ask "Git host (e.g. GitHub)")
+
+echo ""
+echo "── AI models ────────────────────────────────────"
+echo "List every AI model this project can use, comma-separated."
+echo "The setup-model-tiers skill will read this list and propose"
+echo "which model to assign to each Effort Tier + Reasoning Depth."
+echo "Examples: gpt-4o, gpt-4o-mini"
+echo "          claude-opus-4, claude-sonnet-4"
+echo "          llama-3.1-405b, llama-3.1-70b, llama-3.1-8b"
+echo ""
+AVAILABLE_MODELS=$(ask "Available models (comma-separated)")
+
+echo ""
+echo "── AI attribution ───────────────────────────────"
+echo "These appear in commit messages and PR/MR bodies."
+echo ""
+AI_COMMIT_TRAILER=$(ask "Commit co-author line (e.g. Co-Authored-By: AI Assistant <ai@example.com>)" "")
+AI_TOOL_CREDIT=$(ask "PR/MR body AI credit line (e.g. 🤖 Generated with Claude Code)" "")
 
 # ── substitute ───────────────────────────────────────────────────────────────
 
 echo ""
 echo "Substituting placeholders..."
 
-replace "{{PROJECT_NAME}}"          "$PROJECT_NAME"
-replace "{{PROJECT_DESCRIPTION}}"   "$PROJECT_DESCRIPTION"
-replace "{{STACK}}"                 "$STACK"
-replace "{{ARCHITECTURE_SUMMARY}}"  "$ARCHITECTURE_SUMMARY"
-replace "{{CODE_STYLE}}"            "$CODE_STYLE"
-replace "{{LINEAR_WORKSPACE_NAME}}" "$LINEAR_WORKSPACE_NAME"
-replace "{{LINEAR_TEAM_ID}}"        "$LINEAR_TEAM_ID"
-replace "{{LINEAR_PROJECT_ID}}"     "$LINEAR_PROJECT_ID"
-replace "{{LINEAR_ISSUE_PREFIX}}"   "$LINEAR_ISSUE_PREFIX"
-replace "{{LINEAR_PROJECT_URL}}"    "$LINEAR_PROJECT_URL"
+replace "{{PROJECT_NAME}}"        "$PROJECT_NAME"
+replace "{{PROJECT_DESCRIPTION}}" "$PROJECT_DESCRIPTION"
+replace "{{STACK}}"               "$STACK"
+replace "{{ARCHITECTURE_SUMMARY}}" "$ARCHITECTURE_SUMMARY"
+replace "{{CODE_STYLE}}"          "$CODE_STYLE"
+replace "{{PM_TOOL}}"             "$PM_TOOL"
+replace "{{ISSUE_PREFIX}}"        "$ISSUE_PREFIX"
+replace "{{PM_PROJECT_URL}}"      "$PM_PROJECT_URL"
+replace "{{EXPERIMENT_TOOL}}"     "$EXPERIMENT_TOOL"
+replace "{{GIT_HOST}}"            "$GIT_HOST"
+replace "{{AVAILABLE_MODELS}}"   "$AVAILABLE_MODELS"
+replace "{{AI_COMMIT_TRAILER}}"  "$AI_COMMIT_TRAILER"
+replace "{{AI_TOOL_CREDIT}}"     "$AI_TOOL_CREDIT"
 
 # ── done ─────────────────────────────────────────────────────────────────────
 
@@ -80,9 +114,9 @@ echo ""
 echo "  1. Review CLAUDE.md and fill in the 'Common Commands' section for your stack."
 echo "  2. Fill in docs/PRODUCT_SPEC.md with your feature requirements."
 echo "  3. Fill in docs/ARCHITECTURE.md with your directory structure and layer rules."
-echo "  4. Add your local binary paths to CLAUDE.local.md (not committed)."
-echo "  5. Open Claude Code and start your first session — the Product Owner agent"
+echo "  4. Add your local binary paths and PM/Git tool auth notes to CLAUDE.local.md (not committed)."
+echo "  5. Open Claude Code and start your first session — the product-owner-backlog skill"
 echo "     will present an empty backlog and ask what goes into the first release."
 echo ""
-echo "  Linear MCP auth: run \`/mcp\` in Claude Code the first time to authenticate."
+echo "  PM tool MCP (if applicable): run \`/mcp\` in Claude Code the first time to authenticate."
 echo ""
