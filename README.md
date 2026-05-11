@@ -1,38 +1,40 @@
-# Claude Multi-Agent Project Template
+# Multi-Agent Project Template
 
-A GitHub template repository that bootstraps a **Claude Code multi-skill workflow** with your choice of project management tool (Linear, Jira, GitHub Issues, etc.) and Git host (GitHub, GitLab, Bitbucket) for any new project in minutes.
+A GitHub template repository that bootstraps a **multi-skill AI workflow** with your choice of project management tool (Linear, Jira, GitHub Issues, etc.) and Git host (GitHub, GitLab, Bitbucket) for any new project in minutes.
 
 ## What's included
 
 | File | Purpose |
 |---|---|
-| `.claude/skills/setup-model-tiers.md` | One-time setup: propose and approve the model → tier mapping using THOROUGH + ARCHITECTURAL reasoning |
-| `.claude/skills/product-owner-backlog.md` | Session-start: present the PM backlog and ask "What goes into the next release?" |
-| `.claude/skills/product-owner-merge.md` | Post-merge: close PM issues, update CHANGELOG, BACKLOG, version, and merge |
-| `.claude/skills/tech-lead-plan.md` | Produce a structured implementation plan from PM issues before coding starts |
-| `.claude/skills/tech-lead-review.md` | Architectural review of a PR/MR after the Developer opens it |
-| `.claude/skills/developer.md` | Implement a Tech Lead work unit following TDD; open a PR/MR |
-| `.claude/skills/code-reviewer.md` | Runtime, migration, and launch-risk review of a PR/MR |
+| `.claude/skills/calibrate.md` | One-time setup: propose and approve the model → tier mapping |
+| `.claude/skills/summarize.md` | Session-start: fetch and display the backlog |
+| `.claude/skills/analyze.md` | Analytics planning: identify events and screen views for a feature |
+| `.claude/skills/plan.md` | Implementation planning: structured plan from a PM issue |
+| `.claude/skills/implement.md` | TDD implementation and PR/MR |
+| `.claude/skills/review.md` | Architectural PR/MR review |
+| `.claude/skills/audit.md` | Runtime and migration PR/MR review |
+| `.claude/skills/ship.md` | Post-merge housekeeping: close issues, update docs, bump version, merge |
 | `CLAUDE.md` | Orchestrator file: session start, workflow steps, branch naming, review chain |
 | `docs/PRODUCT_SPEC.md` | Blank product spec template |
 | `docs/ARCHITECTURE.md` | Blank architecture doc template |
 | `docs/BACKLOG.md` | Generated from your PM tool — do not edit by hand |
-| `docs/CHANGELOG.md` | Maintained by the product-owner-merge skill after each merged PR/MR |
+| `docs/CHANGELOG.md` | Maintained by the `ship` skill after each merged PR/MR |
 | `docs/VERSIONING.md` | Versioning strategy template |
-| `docs/MODEL_TIERS.md` | Effort Tier + Reasoning Depth vocabulary; maps each skill to a model tier |
+| `docs/MODEL_TIERS.md` | Effort Tier + Reasoning Depth vocabulary; active model → tier mapping |
 | `setup.sh` | Interactive setup script — substitutes `{{PLACEHOLDERS}}` throughout |
 
-## Skill roles
+## Skill workflow
 
 ```
 Session start
-  └─▶ product-owner-backlog — presents backlog, asks "what goes into the next release?"
+  └─▶ summarize — presents backlog, asks "what goes into the next release?"
 
-Large feature work
-  └─▶ tech-lead-plan — produces implementation plan, waits for approval
-         └─▶ developer — implements (TDD), opens PR/MR
-                └─▶ tech-lead-review + code-reviewer — parallel review (architectural + runtime)
-                       └─▶ product-owner-merge — closes issues, regenerates docs, merges PR/MR
+User-facing feature
+  └─▶ analyze — plans analytics events and screen views, waits for approval
+        └─▶ plan — produces implementation plan, waits for approval
+               └─▶ implement — TDD, opens PR/MR
+                      └─▶ review + audit — parallel review (architectural + runtime)
+                             └─▶ ship — closes issues, regenerates docs, merges PR/MR
 ```
 
 ## Quick start
@@ -60,7 +62,9 @@ The script will prompt for:
 - Tech stack and architecture summary
 - PM tool name (Linear, Jira, GitHub Issues, etc.) and issue prefix
 - Git host (GitHub, GitLab, Bitbucket)
+- Available AI models (comma-separated — used by `calibrate`)
 - Experiment tracking tool
+- AI commit trailer and PR/MR credit lines
 
 All `{{PLACEHOLDER}}` values across every file are substituted in one step.
 
@@ -75,15 +79,15 @@ After `setup.sh`:
 
 ### 5. Map your models to tiers
 
-Open Claude Code. Invoke the `setup-model-tiers` skill:
+Invoke the `calibrate` skill:
 
 ```
-Invoke the setup-model-tiers skill
+Invoke the calibrate skill
 ```
 
 This skill uses **THOROUGH + ARCHITECTURAL** reasoning (your most capable model) to read the model list you provided, characterise each model's strengths, and propose which model should handle each Effort Tier + Reasoning Depth combination. Review and approve the proposal — it gets written into `docs/MODEL_TIERS.md` as the **Active mapping**.
 
-Re-run this skill any time your available models change.
+Re-run `calibrate` any time your available models change.
 
 ### 6. Authenticate your PM tool MCP (if applicable)
 
@@ -91,7 +95,7 @@ If your PM tool has an MCP server (e.g. Linear), open Claude Code in your projec
 
 ### 7. Start your first session
 
-Open Claude Code. The `CLAUDE.md` session-start instructions will automatically invoke the `product-owner-backlog` skill, which will present an empty backlog and ask: **"What goes into the first release?"**
+The `CLAUDE.md` session-start instructions will automatically invoke the `summarize` skill, which will present an empty backlog and ask: **"What goes into the first release?"**
 
 ## Placeholders reference
 
@@ -116,4 +120,5 @@ Open Claude Code. The `CLAUDE.md` session-start instructions will automatically 
 - **`.claude/skills/` is committed** — skills are part of the project workflow. If you want them local-only, add `.claude/skills/` to `.gitignore` after setup.
 - **PM tool auth is per-developer** — each team member authenticates independently via their tool's MCP or CLI. No secrets are stored in the repo.
 - **`CLAUDE.local.md` is gitignored** — put machine-specific paths and personal notes there.
-- **Tool-agnostic by design** — the skills describe what to do (fetch issues, open a PR/MR, post a comment) with multi-tool examples. The specific commands depend on your configured PM tool and Git host CLI.
+- **Tool-agnostic by design** — skills describe what to do with multi-tool example tables (Linear/Jira/GitHub/GitLab, GitHub/GitLab/Bitbucket). Specific commands depend on your configured tools.
+- **Model-agnostic by design** — skills declare `effort` and `reasoning` tiers instead of model names. The `calibrate` skill maps your available models to those tiers once, and the active mapping lives in `docs/MODEL_TIERS.md`.

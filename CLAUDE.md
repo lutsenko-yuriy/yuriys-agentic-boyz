@@ -17,17 +17,18 @@ Full product specifications: @docs/PRODUCT_SPEC.md
 | @docs/BACKLOG.md | Known issues and remaining work not yet released |
 | @docs/CHANGELOG.md | Released version history |
 | @docs/VERSIONING.md | Version numbering rules and CI/CD pipeline |
-| @docs/ANALYTICS_EVENTS.md | Analytics event catalogue — events, screen views, and their properties (create if the project tracks analytics) |
-| @docs/experiments/README.md | Experiment registry index — one `.md` file per experiment, tracking hypothesis, metrics, and decision |
+| @docs/ANALYTICS_EVENTS.md | Analytics event catalogue — events, screen views, and their properties |
+| @docs/MODEL_TIERS.md | Effort Tier and Reasoning Depth vocabulary; active model → tier mapping |
+| @docs/experiments/README.md | Experiment registry index — one `.md` file per experiment |
 | CLAUDE.local.md | Local machine settings (binary paths, MCP auth, model tier mappings) — not committed |
-| @docs/MODEL_TIERS.md | Effort Tier and Reasoning Depth vocabulary; maps tiers to your available models |
-| .claude/skills/setup-model-tiers.md | One-time setup: propose and approve the model → tier mapping |
-| .claude/skills/product-owner-backlog.md | Session-start backlog summary skill |
-| .claude/skills/product-owner-merge.md | Post-merge housekeeping skill |
-| .claude/skills/tech-lead-plan.md | Implementation planning skill |
-| .claude/skills/tech-lead-review.md | Architectural PR/MR review skill |
-| .claude/skills/developer.md | TDD implementation and PR/MR skill |
-| .claude/skills/code-reviewer.md | Runtime and migration review skill |
+| .claude/skills/calibrate.md | One-time setup: propose and approve the model → tier mapping |
+| .claude/skills/summarize.md | Session-start: fetch and display the backlog |
+| .claude/skills/analyze.md | Analytics planning: identify events and screen views for a feature |
+| .claude/skills/plan.md | Implementation planning: structured plan from a PM issue |
+| .claude/skills/implement.md | TDD implementation and PR/MR |
+| .claude/skills/review.md | Architectural PR/MR review |
+| .claude/skills/audit.md | Runtime and migration PR/MR review |
+| .claude/skills/ship.md | Post-merge housekeeping: close issues, update docs, bump version, merge |
 
 ## Architecture
 
@@ -57,7 +58,7 @@ Details: @docs/VERSIONING.md
 At the beginning of every new session, before doing anything else:
 
 1. Ensure your PM tool MCP (if used) is authenticated. If MCP tools for your PM tool are unavailable, run `/mcp` to trigger the OAuth flow — see `CLAUDE.local.md` for setup notes.
-2. Invoke the `product-owner-backlog` skill to present the current backlog.
+2. Invoke the `summarize` skill to present the current backlog.
 3. The skill will summarise what has been done and what is remaining, then ask *"What goes into the next release?"*
 4. Wait for the user's answer before proceeding.
 
@@ -67,30 +68,30 @@ Follow TDD: write or update tests **before** implementing the feature or fix. Re
 
 **Only one ticket may be in progress at a time.** Before picking up any new ticket, check the `## In Progress` section at the top of `docs/BACKLOG.md`. If a ticket is listed there, do not start new work until the current ticket is merged and the section is cleared.
 
-**For features with user-visible screens or interactions**: invoke the `product-owner-backlog` skill first for analytics planning before planning implementation:
+**For features with user-visible screens or interactions**: invoke the `analyze` skill first to plan analytics before planning implementation:
 
 ```
-Invoke the product-owner-backlog skill to plan analytics for {{ISSUE_PREFIX}}-XX: <issue title>
+Invoke the analyze skill for {{ISSUE_PREFIX}}-XX: <issue title>
 ```
 
-The skill will propose which events and screen views to track, flag any PII concerns, update `docs/ANALYTICS_EVENTS.md`, and wait for approval. Pure infrastructure or CI changes with no user-facing screens skip this step.
+The skill will identify trackable moments, propose events and screen views, flag PII concerns, update `docs/ANALYTICS_EVENTS.md`, and wait for approval. Pure infrastructure or CI changes with no user-facing screens skip this step.
 
-**For large changes** (spanning multiple files, introducing new domain entities, new dependencies, or architectural shifts): invoke the `tech-lead-plan` skill to produce the implementation plan **before writing any code**:
+**For large changes** (spanning multiple files, introducing new domain entities, new dependencies, or architectural shifts): invoke the `plan` skill to produce the implementation plan **before writing any code**:
 
 ```
-Invoke the tech-lead-plan skill for {{ISSUE_PREFIX}}-XX: <issue title>
+Invoke the plan skill for {{ISSUE_PREFIX}}-XX: <issue title>
 ```
 
-The skill will produce a structured plan (dependencies, models, UI changes, test strategy, ordered phases, Developer work units) and wait for the user to approve or adjust it.
+The skill will produce a structured plan (dependencies, models, UI changes, test strategy, ordered phases, work units) and wait for the user to approve or adjust it.
 
-1. For features with user-facing screens/interactions, invoke `product-owner-backlog` for analytics planning first and wait for approval.
-2. For large changes, invoke `tech-lead-plan` and wait for plan approval.
+1. For features with user-facing screens/interactions, invoke `analyze` first and wait for approval.
+2. For large changes, invoke `plan` and wait for plan approval.
 3. Create a new feature branch from the latest `main` and switch to it before writing any code. Always include the issue number after `feature/`:
    ```
    git fetch origin
    git checkout -b feature/{{ISSUE_PREFIX}}-XX-<short-description> origin/main
    ```
-   If the branch already exists, rebase it onto `origin/main` before writing any code (`git rebase origin/main`). This ensures the PR/MR diff contains only the new work. Mark the ticket as In Progress in `docs/BACKLOG.md`: replace the `_(nothing in progress)_` placeholder with a single bullet linking to the issue (same format as in the milestone sections).
+   If the branch already exists, rebase it onto `origin/main` before writing any code (`git rebase origin/main`). This ensures the PR/MR diff contains only the new work. Mark the ticket as In Progress in `docs/BACKLOG.md`: replace the `_(nothing in progress)_` placeholder with a single bullet linking to the issue.
 4. Write failing tests that describe the expected behaviour.
 5. Implement the minimum code to make the tests pass.
 6. Refactor if needed.
@@ -107,13 +108,13 @@ The skill will produce a structured plan (dependencies, models, UI changes, test
     - Push the branch to the remote.
     - Open a PR/MR.
     - Invoke both review skills simultaneously once the PR/MR is open:
-      - `tech-lead-review` for architectural review: `Invoke the tech-lead-review skill for PR/MR #<number>`.
-      - `code-reviewer` for runtime/launch/migration review: `Invoke the code-reviewer skill for PR/MR #<number>`.
+      - `review` for architectural review: `Invoke the review skill for PR/MR #<number>`.
+      - `audit` for runtime/launch/migration review: `Invoke the audit skill for PR/MR #<number>`.
     - Inform the user of the PR/MR URL.
 13. Remind the user to compact the context after each commit to keep the conversation lean.
-14. When the user approves the PR/MR, invoke `product-owner-merge` **before merging**:
+14. When the user approves the PR/MR, invoke `ship` **before merging**:
     ```
-    Invoke the product-owner-merge skill for PR/MR #<number>
+    Invoke the ship skill for PR/MR #<number>
     ```
     The skill closes the PM issues, adds a CHANGELOG entry, regenerates BACKLOG.md, bumps the version, commits onto the feature branch, pushes, and merges. No separate approval is needed for the version bump.
 15. Clear the context after the PR/MR with the changes is merged.
