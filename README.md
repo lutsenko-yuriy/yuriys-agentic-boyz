@@ -15,9 +15,9 @@ A GitHub template repository that bootstraps a **multi-skill AI workflow** with 
 | `skills/build/implement/SKILL.md` | TDD implementation and PR/MR |
 | `skills/verify/review/SKILL.md` | Architectural PR/MR review |
 | `skills/verify/audit/SKILL.md` | Runtime and migration PR/MR review |
-| `.claude/styles/DETAILED.md` | Style def: full prose, default |
-| `.claude/styles/CONCISE.md` | Style def: lecture-note shorthand, abbreviation-friendly |
-| `.claude/styles/SCHEMATIC.md` | Style def: TeX-math + Haskell notation |
+| `styles/DETAILED.md` | Style def: full prose, default |
+| `styles/CONCISE.md` | Style def: lecture-note shorthand, abbreviation-friendly |
+| `styles/SCHEMATIC.md` | Style def: TeX-math + Haskell notation |
 | `CLAUDE.md` | Orchestrator file: session start, workflow steps, branch naming, review chain |
 | `docs/PRODUCT_SPEC.md` | Blank product spec template |
 | `docs/ARCHITECTURE.md` | Blank architecture doc template |

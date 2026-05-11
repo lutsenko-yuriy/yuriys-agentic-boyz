@@ -24,7 +24,7 @@ Which style?
 
 ### 2. Load the style rules
 
-Read `.claude/styles/<STYLE>.md` in full and internalise the rules. Apply them immediately — every response from this point forward must conform to the loaded style.
+Read `styles/<STYLE>.md` in full and internalise the rules. Apply them immediately — every response from this point forward must conform to the loaded style.
 
 ### 3. Persist the active style
 
