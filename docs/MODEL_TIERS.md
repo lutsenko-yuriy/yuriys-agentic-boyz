@@ -24,17 +24,25 @@ This project describes what each skill needs from a model using two axes: **Effo
 
 ## Skill capability map
 
+### Meta skills — operate on the session and agent layer
+
 | Skill | Effort | Reasoning | Why |
 |---|---|---|---|
 | `calibrate` | THOROUGH | ARCHITECTURAL | Reasoning about model strengths requires the most capable model available |
+| `style` | RAPID | MECHANICAL | Load and apply a communication style definition |
+
+### Product skills — operate on the codebase and product
+
+| Skill | Effort | Reasoning | Why |
+|---|---|---|---|
 | `plan` | THOROUGH | ARCHITECTURAL | Full codebase read, cross-file design decisions, long-horizon planning |
 | `audit` | THOROUGH | TACTICAL | Exhaustive runtime, migration, and edge-case analysis |
 | `review` | FOCUSED | ARCHITECTURAL | Targeted architectural review of a PR/MR diff |
 | `analyze` | FOCUSED | ARCHITECTURAL | Cross-cutting analytics reasoning scoped to one feature |
+| `experiment` | FOCUSED | ARCHITECTURAL | Design a product experiment: hypothesis, metrics, variant spec |
 | `implement` | FOCUSED | TACTICAL | Implement a scoped work unit correctly and completely |
 | `ship` | RAPID | TACTICAL | Structured housekeeping: close issues, update docs, bump version, merge |
 | `summarize` | RAPID | MECHANICAL | Structured PM data fetch and format |
-| `style` | RAPID | MECHANICAL | Load and apply a communication style definition |
 
 ---
 

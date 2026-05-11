@@ -11,6 +11,7 @@ A GitHub template repository that bootstraps a **multi-skill AI workflow** with 
 | `skills/manage/summarize/SKILL.md` | Session-start: fetch and display the backlog |
 | `skills/manage/ship/SKILL.md` | Post-merge housekeeping: close issues, update docs, bump version, merge |
 | `skills/design/analyze/SKILL.md` | Analytics planning: identify events and screen views for a feature |
+| `skills/design/experiment/SKILL.md` | Experiment design: hypothesis, metrics, variant spec, registry entry |
 | `skills/design/plan/SKILL.md` | Implementation planning: structured plan from a PM issue |
 | `skills/build/implement/SKILL.md` | TDD implementation and PR/MR |
 | `skills/verify/review/SKILL.md` | Architectural PR/MR review |
@@ -122,8 +123,9 @@ The `CLAUDE.md` session-start instructions will automatically invoke the `summar
 ## Notes
 
 - **`.claude/skills/` is committed** — skills are part of the project workflow. If you want them local-only, add `.claude/skills/` to `.gitignore` after setup.
-- **PM tool auth is per-developer** — each team member authenticates independently via their tool's MCP or CLI. No secrets are stored in the repo.
+- **No external PM tool required** — leave the PM tool blank during `setup.sh` and the template defaults to your Git host's built-in issue tracker (GitHub Issues, GitLab Issues, etc.). No MCP, no extra auth, no configuration. Add an external tool later if the project outgrows it.
+- **PM tool auth is per-developer** — when using an external PM tool with an MCP server (e.g. Linear), each team member authenticates independently. No secrets are stored in the repo.
 - **`CLAUDE.local.md` is gitignored** — put machine-specific paths and personal notes there.
-- **Tool-agnostic by design** — skills describe what to do with multi-tool example tables (Linear/Jira/GitHub/GitLab, GitHub/GitLab/Bitbucket). Specific commands depend on your configured tools.
+- **Tool-agnostic by design** — skills describe what to do with multi-tool example tables (Linear/Jira/GitHub Issues/GitLab Issues, GitHub/GitLab/Bitbucket). Specific commands depend on your configured tools.
 - **Model-agnostic by design** — skills declare `effort` and `reasoning` tiers instead of model names. The `calibrate` skill maps your available models to those tiers once, and the active mapping lives in `docs/MODEL_TIERS.md`.
 - **Communication styles** — the `style` skill switches between DETAILED (full prose), CONCISE (lecture-note shorthand), and SCHEMATIC (TeX-like notation). Active style persists across sessions via `CLAUDE.local.md`.

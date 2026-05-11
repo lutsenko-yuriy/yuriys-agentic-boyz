@@ -47,13 +47,26 @@ ARCHITECTURE_SUMMARY=$(ask "One-line architecture summary (e.g. Vertical-slice w
 CODE_STYLE=$(ask "Code style reference (e.g. 'Flutter style guide' or 'Airbnb JS')" "Project conventions")
 
 echo ""
+echo "── Git host ─────────────────────────────────────"
+echo "Where pull requests / merge requests live."
+echo "Examples: GitHub, GitLab, Bitbucket"
+echo ""
+GIT_HOST=$(ask "Git host (e.g. GitHub)")
+
+echo ""
 echo "── Project management tool ──────────────────────"
 echo "This is the tool where issues, milestones, and the backlog live."
-echo "Examples: Linear, Jira, GitHub Issues, GitLab Issues, Shortcut"
+echo "Examples: Linear, Jira, Shortcut"
+echo "Leave blank to use the built-in issue tracker of your Git host"
+echo "(${GIT_HOST} Issues) — zero config required."
 echo ""
-PM_TOOL=$(ask "PM tool name (e.g. Linear)")
+PM_TOOL=$(ask "PM tool name (leave blank to use ${GIT_HOST} Issues)" "")
+if [[ -z "$PM_TOOL" ]]; then
+  PM_TOOL="${GIT_HOST} Issues"
+  echo "  → Using ${PM_TOOL} (built-in repo issue tracker)"
+fi
 ISSUE_PREFIX=$(ask "Issue identifier prefix (e.g. HAB, APP, PROJ — leave blank for tools like GitHub Issues that use numbers)" "")
-PM_PROJECT_URL=$(ask "PM project URL (link to the board / backlog)" "")
+PM_PROJECT_URL=$(ask "PM project URL (link to the board / backlog — leave blank if using repo issues)" "")
 
 echo ""
 echo "── Experiment tracking ──────────────────────────"
@@ -61,13 +74,6 @@ echo "Tool used to run A/B tests or feature flags."
 echo "Examples: Firebase A/B Testing, Statsig, LaunchDarkly, PostHog"
 echo ""
 EXPERIMENT_TOOL=$(ask "Experiment tool name" "Firebase A/B Testing")
-
-echo ""
-echo "── Git host ─────────────────────────────────────"
-echo "Where pull requests / merge requests live."
-echo "Examples: GitHub, GitLab, Bitbucket"
-echo ""
-GIT_HOST=$(ask "Git host (e.g. GitHub)")
 
 echo ""
 echo "── AI models ────────────────────────────────────"
