@@ -7,6 +7,10 @@ A GitHub template repository that bootstraps a **multi-skill AI workflow** with 
 | File | Purpose |
 |---|---|
 | `.claude/skills/calibrate.md` | One-time setup: propose and approve the model → tier mapping |
+| `.claude/skills/style.md` | Switch communication style: DETAILED, CONCISE, or SCHEMATIC |
+| `.claude/styles/DETAILED.md` | Style definition: full prose, default Claude behaviour |
+| `.claude/styles/CONCISE.md` | Style definition: lecture-note shorthand, abbreviation-friendly |
+| `.claude/styles/SCHEMATIC.md` | Style definition: minimal words, TeX-like symbols |
 | `.claude/skills/summarize.md` | Session-start: fetch and display the backlog |
 | `.claude/skills/analyze.md` | Analytics planning: identify events and screen views for a feature |
 | `.claude/skills/plan.md` | Implementation planning: structured plan from a PM issue |
@@ -122,3 +126,4 @@ The `CLAUDE.md` session-start instructions will automatically invoke the `summar
 - **`CLAUDE.local.md` is gitignored** — put machine-specific paths and personal notes there.
 - **Tool-agnostic by design** — skills describe what to do with multi-tool example tables (Linear/Jira/GitHub/GitLab, GitHub/GitLab/Bitbucket). Specific commands depend on your configured tools.
 - **Model-agnostic by design** — skills declare `effort` and `reasoning` tiers instead of model names. The `calibrate` skill maps your available models to those tiers once, and the active mapping lives in `docs/MODEL_TIERS.md`.
+- **Communication styles** — the `style` skill switches between DETAILED (full prose), CONCISE (lecture-note shorthand), and SCHEMATIC (TeX-like notation). Active style persists across sessions via `CLAUDE.local.md`.

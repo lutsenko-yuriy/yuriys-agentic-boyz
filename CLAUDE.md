@@ -22,6 +22,7 @@ Full product specifications: @docs/PRODUCT_SPEC.md
 | @docs/experiments/README.md | Experiment registry index — one `.md` file per experiment |
 | CLAUDE.local.md | Local machine settings (binary paths, MCP auth, model tier mappings) — not committed |
 | .claude/skills/calibrate.md | One-time setup: propose and approve the model → tier mapping |
+| .claude/skills/style.md | Switch communication style: DETAILED, CONCISE, or SCHEMATIC |
 | .claude/skills/summarize.md | Session-start: fetch and display the backlog |
 | .claude/skills/analyze.md | Analytics planning: identify events and screen views for a feature |
 | .claude/skills/plan.md | Implementation planning: structured plan from a PM issue |
@@ -58,9 +59,10 @@ Details: @docs/VERSIONING.md
 At the beginning of every new session, before doing anything else:
 
 1. Ensure your PM tool MCP (if used) is authenticated. If MCP tools for your PM tool are unavailable, run `/mcp` to trigger the OAuth flow — see `CLAUDE.local.md` for setup notes.
-2. Invoke the `summarize` skill to present the current backlog.
-3. The skill will summarise what has been done and what is remaining, then ask *"What goes into the next release?"*
-4. Wait for the user's answer before proceeding.
+2. Check `CLAUDE.local.md` for an `## Active communication style` section and silently load that style (see `.claude/styles/`). Default to DETAILED if absent.
+3. Invoke the `summarize` skill to present the current backlog.
+4. The skill will summarise what has been done and what is remaining, then ask *"What goes into the next release?"*
+5. Wait for the user's answer before proceeding.
 
 ## Workflow
 

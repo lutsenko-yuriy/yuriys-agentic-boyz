@@ -34,6 +34,7 @@ This project describes what each skill needs from a model using two axes: **Effo
 | `implement` | FOCUSED | TACTICAL | Implement a scoped work unit correctly and completely |
 | `ship` | RAPID | TACTICAL | Structured housekeeping: close issues, update docs, bump version, merge |
 | `summarize` | RAPID | MECHANICAL | Structured PM data fetch and format |
+| `style` | RAPID | MECHANICAL | Load and apply a communication style definition |
 
 ---
 
