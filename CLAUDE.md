@@ -21,15 +21,15 @@ Full product specifications: @docs/PRODUCT_SPEC.md
 | @docs/MODEL_TIERS.md | Effort Tier and Reasoning Depth vocabulary; active model → tier mapping |
 | @docs/experiments/README.md | Experiment registry index — one `.md` file per experiment |
 | CLAUDE.local.md | Local machine settings (binary paths, MCP auth, model tier mappings) — not committed |
-| .claude/skills/calibrate.md | One-time setup: propose and approve the model → tier mapping |
-| .claude/skills/style.md | Switch communication style: DETAILED, CONCISE, or SCHEMATIC |
-| .claude/skills/summarize.md | Session-start: fetch and display the backlog |
-| .claude/skills/analyze.md | Analytics planning: identify events and screen views for a feature |
-| .claude/skills/plan.md | Implementation planning: structured plan from a PM issue |
-| .claude/skills/implement.md | TDD implementation and PR/MR |
-| .claude/skills/review.md | Architectural PR/MR review |
-| .claude/skills/audit.md | Runtime and migration PR/MR review |
-| .claude/skills/ship.md | Post-merge housekeeping: close issues, update docs, bump version, merge |
+| skills/configure/calibrate/SKILL.md | One-time setup: propose and approve the model → tier mapping |
+| skills/configure/style/SKILL.md | Switch communication style: DETAILED, CONCISE, or SCHEMATIC |
+| skills/manage/summarize/SKILL.md | Session-start: fetch and display the backlog |
+| skills/manage/ship/SKILL.md | Post-merge housekeeping: close issues, update docs, bump version, merge |
+| skills/design/analyze/SKILL.md | Analytics planning: identify events and screen views for a feature |
+| skills/design/plan/SKILL.md | Implementation planning: structured plan from a PM issue |
+| skills/build/implement/SKILL.md | TDD implementation and PR/MR |
+| skills/verify/review/SKILL.md | Architectural PR/MR review |
+| skills/verify/audit/SKILL.md | Runtime and migration PR/MR review |
 
 ## Architecture
 
