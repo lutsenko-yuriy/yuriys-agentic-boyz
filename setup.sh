@@ -77,14 +77,63 @@ EXPERIMENT_TOOL=$(ask "Experiment tool name" "Firebase A/B Testing")
 
 echo ""
 echo "── AI models ────────────────────────────────────"
-echo "List every AI model this project can use, comma-separated."
-echo "The setup-model-tiers skill will read this list and propose"
-echo "which model to assign to each Effort Tier + Reasoning Depth."
-echo "Examples: gpt-4o, gpt-4o-mini"
-echo "          claude-opus-4, claude-sonnet-4"
-echo "          llama-3.1-405b, llama-3.1-70b, llama-3.1-8b"
+echo "Surveying available models on this machine..."
 echo ""
-AVAILABLE_MODELS=$(ask "Available models (comma-separated)")
+
+# ── auto-detect models ────────────────────────────────────────────────────────
+
+_detected_models=()
+
+# Ollama — list pulled models (name:tag, strip :latest suffix for brevity)
+if command -v ollama &>/dev/null && ollama list &>/dev/null 2>&1; then
+  while IFS= read -r line; do
+    model=$(echo "$line" | awk '{print $1}')
+    # strip :latest tag
+    model="${model%:latest}"
+    [[ -n "$model" ]] && _detected_models+=("$model")
+  done < <(ollama list 2>/dev/null | tail -n +2)
+  if [[ ${#_detected_models[@]} -gt 0 ]]; then
+    echo "  Ollama models found: ${_detected_models[*]}"
+  else
+    echo "  Ollama is installed but no models are pulled yet."
+  fi
+fi
+
+# Cloud API keys — report which providers are reachable
+if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+  echo "  ANTHROPIC_API_KEY detected — Anthropic models available"
+  _detected_models+=("claude-opus-4-7" "claude-sonnet-4-6" "claude-haiku-4-5")
+fi
+if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+  echo "  OPENAI_API_KEY detected — OpenAI models available"
+  _detected_models+=("gpt-4o" "gpt-4o-mini")
+fi
+if [[ -n "${GEMINI_API_KEY:-}" || -n "${GOOGLE_API_KEY:-}" ]]; then
+  echo "  Google API key detected — Gemini models available"
+  _detected_models+=("gemini-1.5-pro" "gemini-1.5-flash")
+fi
+if [[ -n "${GROQ_API_KEY:-}" ]]; then
+  echo "  GROQ_API_KEY detected — Groq models available"
+  _detected_models+=("llama-3.3-70b-versatile" "llama-3.1-8b-instant")
+fi
+if [[ -n "${MISTRAL_API_KEY:-}" ]]; then
+  echo "  MISTRAL_API_KEY detected — Mistral models available"
+  _detected_models+=("mistral-large-latest" "mistral-small-latest")
+fi
+
+# Build comma-separated suggestion from detected list (deduplicated)
+_suggestion=""
+if [[ ${#_detected_models[@]} -gt 0 ]]; then
+  _suggestion=$(printf '%s\n' "${_detected_models[@]}" | awk '!seen[$0]++' | paste -sd ',' -)
+  echo ""
+  echo "  Suggested: ${_suggestion}"
+fi
+
+echo ""
+echo "Edit the list — add, remove, or rename models as needed."
+echo "The calibrate skill will map them to effort/reasoning tiers."
+echo ""
+AVAILABLE_MODELS=$(ask "Available models (comma-separated)" "${_suggestion}")
 
 echo ""
 echo "── AI attribution ───────────────────────────────"
