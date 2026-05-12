@@ -2,6 +2,7 @@
 name: implement
 effort: FOCUSED
 reasoning: TACTICAL
+output_style: CONCISE
 description: Implement a work unit from an approved plan. Given a PM issue ID, fetches the plan comment, follows strict TDD (red → green → refactor), creates the feature branch, runs tests and linting, commits with a style-only commit first, pushes, and opens a PR/MR. Does not merge — that is the `ship` skill's job.
 ---
 
