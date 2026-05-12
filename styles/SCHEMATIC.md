@@ -2,6 +2,13 @@
 
 TeX-math notation fused with Haskell-style syntax. Logic and sets from TeX; types, composition, binding, and guards from Haskell. Zero prose. Every idea is an expression.
 
+## When to use
+
+- **Agent-to-agent communication** — skill outputs consumed by another skill or agent that understands SCHEMATIC notation.
+- **Workflow and pipeline specs** — describing how skills chain together (`>>=`, `∧`, `>>`).
+- **Type-level reasoning** — expressing what a skill accepts and returns, constraints, and invariants.
+- **Audience:** another agent or a developer who knows the notation. Do *not* use with people unfamiliar with SCHEMATIC — switch to CONCISE or DETAILED instead.
+
 ---
 
 ## Core syntax
