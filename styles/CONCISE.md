@@ -2,6 +2,13 @@
 
 Lecture-note style. Dense, human-readable, abbreviation-friendly. Like a student writing a maths reference sheet — every word earns its place.
 
+## When to use
+
+- **Live chat with a person** — PR reviews, Slack threads, standup notes, quick Q&A.
+- **Code comments and inline docs** — anything a developer reads while navigating the codebase.
+- **Session responses** — day-to-day interaction with Claude Code where brevity saves time.
+- **Audience:** humans reading in real time, in context, who don't need motivation or background explained.
+
 ## Rules
 
 - Short sentences. One idea per sentence.

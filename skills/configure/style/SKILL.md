@@ -11,13 +11,16 @@ description: Switch the active communication style for this session. Three style
 
 The style name is passed as the argument: `DETAILED`, `CONCISE`, or `SCHEMATIC`.
 
-If no argument is given or the name is unrecognised, list the available styles and ask the user to choose:
+If no argument is given or the name is unrecognised, list the available styles with their recommended use cases and ask the user to choose:
 
 ```
 Available styles:
-- DETAILED  — full prose, complete explanations (default)
-- CONCISE   — lecture-note shorthand, abbreviation-friendly
-- SCHEMATIC — minimal words, TeX-like symbols
+- DETAILED   — full prose, complete explanations (default)
+               Best for: long-form docs, specs, ADRs, onboarding material
+- CONCISE    — lecture-note shorthand, abbreviation-friendly
+               Best for: live chat, PR reviews, code comments, day-to-day session replies
+- SCHEMATIC  — TeX-math + Haskell notation, zero prose
+               Best for: agent-to-agent output, workflow/pipeline specs, type-level reasoning
 
 Which style?
 ```
