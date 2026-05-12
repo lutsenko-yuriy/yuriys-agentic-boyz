@@ -2,6 +2,7 @@
 name: calibrate
 effort: THOROUGH
 reasoning: ARCHITECTURAL
+output_style: DETAILED
 description: One-time project setup skill. Reads the available models listed in docs/MODEL_TIERS.md, proposes an optimal mapping from every Effort Tier + Reasoning Depth combination to a specific model, waits for user approval or adjustments, then writes the agreed mapping into docs/MODEL_TIERS.md. Invoke once after setup.sh, before the first working session. This skill itself requires THOROUGH + ARCHITECTURAL capability to reason about model strengths.
 ---
 

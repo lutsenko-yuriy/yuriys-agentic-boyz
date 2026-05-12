@@ -2,6 +2,7 @@
 name: audit
 effort: THOROUGH
 reasoning: TACTICAL
+output_style: CONCISE
 description: Runtime and migration review of a PR/MR. Checks for launch-time failures, migration issues, platform-specific risks, state consistency problems, and business logic edge cases. Leaves inline comments prefixed with [audit] and produces a structured summary. Invoke after `implement` opens a PR/MR, in parallel with `review`.
 ---
 

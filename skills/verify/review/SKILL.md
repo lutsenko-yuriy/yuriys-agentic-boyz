@@ -2,6 +2,7 @@
 name: review
 effort: FOCUSED
 reasoning: ARCHITECTURAL
+output_style: CONCISE
 description: Architectural review of a PR/MR. Checks for layer violations, dependency direction, module boundary breaches, naming/placement issues, and interface drift. Leaves inline comments prefixed with [review] and produces a structured summary. Invoke after `implement` opens a PR/MR, before human review, in parallel with `audit`.
 ---
 

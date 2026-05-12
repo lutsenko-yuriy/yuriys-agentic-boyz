@@ -46,6 +46,13 @@ Respond with the confirmation phrase defined at the bottom of the loaded style f
 
 ---
 
+## Style resolution order
+
+1. **Active session style** — if `CLAUDE.local.md` contains `## Active communication style`, load it and apply it to all output, overriding every skill's own default.
+2. **Skill default** — if no session style is set, each skill uses the `output_style` declared in its own frontmatter.
+
+There is no global fallback. If neither is set, the skill chooses based on its own `output_style`.
+
 ## Notes for session start
 
-At session start, before invoking `summarize`, check `CLAUDE.local.md` for an `## Active communication style` section. If present, silently load that style file and apply it. If absent, default to DETAILED.
+At session start, before invoking `summarize`, check `CLAUDE.local.md` for an `## Active communication style` section. If present, silently load that style file — it overrides all skill defaults for this session. If absent, each skill will use its own `output_style`.

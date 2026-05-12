@@ -2,6 +2,7 @@
 name: analyze
 effort: FOCUSED
 reasoning: ARCHITECTURAL
+output_style: DETAILED
 description: Analytics planning for a feature before implementation begins. Identifies the user-facing actions and screens introduced by a task, proposes which events and screen views to track, flags PII concerns, and updates docs/ANALYTICS_EVENTS.md after approval. Invoke for any feature or change with user-visible screens or interactions, before `plan` or `implement`.
 ---
 

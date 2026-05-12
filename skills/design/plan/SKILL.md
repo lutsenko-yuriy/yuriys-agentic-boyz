@@ -2,6 +2,7 @@
 name: plan
 effort: THOROUGH
 reasoning: ARCHITECTURAL
+output_style: DETAILED
 description: Produce a structured implementation plan for a PM issue or milestone before any code is written. Fetches the issue, reads the codebase, breaks the work into implementation units, posts the plan as a PM comment, and waits for user approval. For large changes spanning multiple files, new domain entities, new dependencies, or architectural shifts.
 ---
 

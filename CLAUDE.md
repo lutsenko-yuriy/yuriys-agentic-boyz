@@ -59,7 +59,7 @@ Details: @docs/VERSIONING.md
 At the beginning of every new session, before doing anything else:
 
 1. Ensure your PM tool MCP (if used) is authenticated. If MCP tools for your PM tool are unavailable, run `/mcp` to trigger the OAuth flow — see `CLAUDE.local.md` for setup notes.
-2. Check `CLAUDE.local.md` for an `## Active communication style` section and silently load that style (see `styles/`). Default to DETAILED if absent.
+2. Check `CLAUDE.local.md` for an `## Active communication style` section and silently load that style (see `styles/`). If absent, each skill will use its own `output_style` — no global default.
 3. Invoke the `summarize` skill to present the current backlog.
 4. The skill will summarise what has been done and what is remaining, then ask *"What goes into the next release?"*
 5. Wait for the user's answer before proceeding.
