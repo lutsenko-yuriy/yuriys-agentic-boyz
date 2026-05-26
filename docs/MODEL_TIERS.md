@@ -85,11 +85,11 @@ For teams that haven't run `calibrate` yet, or want to cross-check proposals:
 
 | Tier + Depth | Example models |
 |---|---|
-| THOROUGH + ARCHITECTURAL | Claude Opus, GPT-4o, Gemini 1.5 Pro, Llama 3.1 405B |
-| THOROUGH + TACTICAL | Claude Opus, GPT-4o, Gemini 1.5 Pro |
-| FOCUSED + ARCHITECTURAL | Claude Sonnet, GPT-4o-mini, Gemini 1.5 Flash, Mistral Large |
-| FOCUSED + TACTICAL | Claude Sonnet, GPT-4o-mini, Gemini 1.5 Flash, Mistral Large |
-| RAPID + TACTICAL | Claude Haiku, GPT-3.5-turbo, Gemini Flash, Mistral Small |
-| RAPID + MECHANICAL | Claude Haiku, GPT-3.5-turbo, Gemini Flash, Mistral Small |
+| THOROUGH + ARCHITECTURAL | Claude Opus, GPT-4o, Gemini 1.5 Pro, Llama 3.1 405B; LM Studio (Llama 3.1 70B+, DeepSeek R1 32B+ at Q8) |
+| THOROUGH + TACTICAL | Claude Opus, GPT-4o, Gemini 1.5 Pro; LM Studio (Llama 3.1 70B+, Qwen 2.5 72B at Q4+) |
+| FOCUSED + ARCHITECTURAL | Claude Sonnet, GPT-4o-mini, Gemini 1.5 Flash, Mistral Large; LM Studio (Llama 3.1 8B Q8, Qwen 2.5 14B, Mistral 7B Instruct) |
+| FOCUSED + TACTICAL | Claude Sonnet, GPT-4o-mini, Gemini 1.5 Flash, Mistral Large; LM Studio (Llama 3.1 8B Q8, Qwen 2.5 14B, Mistral 7B Instruct) |
+| RAPID + TACTICAL | Claude Haiku, GPT-3.5-turbo, Gemini Flash, Mistral Small; LM Studio (Phi-3 Mini, Gemma 2 9B Q4, Qwen 2.5 7B) |
+| RAPID + MECHANICAL | Claude Haiku, GPT-3.5-turbo, Gemini Flash, Mistral Small; LM Studio (Phi-3 Mini, Gemma 2 2B, Qwen 2.5 3B) |
 
-These are starting points. A strong local model may outperform a cloud model for a specific task — `calibrate` will reason about this given your actual list.
+These are starting points. A strong local model may outperform a cloud model for a specific task — `calibrate` will reason about this given your actual list. For LM Studio models, list the loaded model name (visible in the LM Studio UI or via `GET http://localhost:1234/v1/models`) and include the quantisation level if known — it directly affects which tier the model fits.

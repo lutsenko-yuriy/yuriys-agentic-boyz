@@ -31,7 +31,7 @@ For every model in the available list, reason across these dimensions:
 | **Speed / cost** | Is it fast and cheap enough for high-frequency FOCUSED/RAPID work? |
 | **Instruction following** | Does it reliably follow structured multi-step procedures? |
 
-If you lack benchmark data for a model, reason from its known tier (e.g. "large frontier model", "mid-size open-weight", "fast small model") and state your uncertainty explicitly.
+If you lack benchmark data for a model, reason from its known tier (e.g. "large frontier model", "mid-size open-weight", "fast small model") and state your uncertainty explicitly. For **LM Studio** models the identifier comes from the LM Studio UI or `GET http://localhost:1234/v1/models`; treat a quantised local model as roughly 1–2 tiers below its full-precision cloud equivalent (e.g. a Q4 8 B model ≈ RAPID tier) unless the user confirms otherwise.
 
 ### 3. Propose the mapping
 
