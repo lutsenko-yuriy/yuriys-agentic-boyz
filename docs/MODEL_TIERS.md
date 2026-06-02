@@ -50,7 +50,9 @@ This project describes what each skill needs from a model using two axes: **Effo
 
 Models available to this project (set during `setup.sh`):
 
-**{{AVAILABLE_MODELS}}**
+| Model | Access |
+|---|---|
+| {{AVAILABLE_MODELS}} | |
 
 The `calibrate` skill reads this list and proposes the mapping below. Re-run `calibrate` whenever the available models change.
 
@@ -59,6 +61,8 @@ The `calibrate` skill reads this list and proposes the mapping below. Re-run `ca
 ## Active mapping
 
 _Not yet configured — invoke the `calibrate` skill to populate this section._
+
+Once configured, the table will include a `Claude Code alias` column (`opus` / `sonnet` / `lm-studio`) used by command stubs to route each skill to the correct model.
 
 ---
 
