@@ -37,14 +37,7 @@ If you lack benchmark data for a model, reason from its known tier (e.g. "large 
 
 Map each combination used by the project's skills to the single best available model. The combinations are:
 
-| Effort | Reasoning | Used by |
-|---|---|---|
-| THOROUGH | ARCHITECTURAL | `plan`, `calibrate` |
-| THOROUGH | TACTICAL | `audit` |
-| FOCUSED | ARCHITECTURAL | `review`, `analyze` |
-| FOCUSED | TACTICAL | `implement` |
-| RAPID | TACTICAL | `ship` |
-| RAPID | MECHANICAL | `summarize` |
+@skills/configure/calibrate/resources/skill-tier-map.md
 
 Rules for the proposal:
 - Each combination must map to exactly one model from the available list.
@@ -109,52 +102,7 @@ Do not modify any other section of `docs/MODEL_TIERS.md`.
 
 After writing `docs/MODEL_TIERS.md`, update every `.claude/commands/*.md` stub that has changed alias. The stub format is:
 
-**Routing rule — only spawn when the target model differs from the current session model:**
-
-- **Spawn up** (`opus`) — target is more capable than the session model; use the Agent routing stub below.
-- **Run locally** (same alias as session, e.g. `sonnet` when session is sonnet) — spawning adds cold-start overhead with no benefit; use the passthrough format (`@skills/... + $ARGUMENTS`).
-- **Route to local model** (`lm-studio`) — target is a local LM Studio model; use the script stub.
-
-**Agent routing stub format (use when spawning up to a more capable model):**
-```markdown
-Route this invocation to a subagent. **Do not execute the skill yourself.**
-
-**Skill:** <name>
-**Tier:** <EFFORT> + <REASONING>
-**Model alias:** <alias>
-
-Steps:
-1. Read `skills/<path>/SKILL.md` using the Read tool.
-2. Spawn an Agent with:
-   - `model`: `"<alias>"`
-   - `prompt`: full content of the skill file[, followed by the arguments below].
-
-[**Arguments:**
-$ARGUMENTS]
-```
-
-**Passthrough format (use when target model == session model):**
-```markdown
-@skills/<path>/SKILL.md
-
-$ARGUMENTS
-```
-
-**Script stub format (use for lm-studio alias):**
-
-_With `$ARGUMENTS` (skills that take user-supplied input):_
-```markdown
-Run via Bash: `python3 scripts/skill_router.py skills/<path>/SKILL.md --args '$ARGUMENTS'`
-If the script exits non-zero (LM Studio unavailable or model not loaded), fall back to reading `skills/<path>/SKILL.md` and executing it yourself.
-
-$ARGUMENTS
-```
-
-_Without `$ARGUMENTS` (skills that need no user input):_
-```markdown
-Run via Bash: `python3 scripts/skill_router.py skills/<path>/SKILL.md`
-If the script exits non-zero (LM Studio unavailable or model not loaded), fall back to reading `skills/<path>/SKILL.md` and executing it yourself.
-```
+@skills/configure/calibrate/resources/stub-formats.md
 
 Only update stubs whose alias changed — do not touch stubs that are already correct.
 
