@@ -19,6 +19,24 @@ Read `docs/MODEL_TIERS.md` in full. Note:
 - The skill capability map (which skills need which combination)
 - The available models listed under `## Available models`
 
+### 1a. Introduce the tier vocabulary
+
+Present a brief summary of the two axes to the user before proceeding:
+
+> **Effort Tiers** — how much of the codebase a task needs to read and reason over:
+> - **THOROUGH** — codebase-wide analysis; needs maximum context and reasoning depth
+> - **FOCUSED** — scoped to a slice or feature; balances quality and speed
+> - **RAPID** — fast lookups or mechanical transformations; speed over depth
+>
+> **Reasoning Depths** — what kind of thinking the task requires:
+> - **ARCHITECTURAL** — cross-cutting design decisions, dependency analysis, structural trade-offs
+> - **TACTICAL** — implementation correctness, bug spotting, code generation
+> - **MECHANICAL** — formatting, summarisation, templated output
+>
+> Every skill in this project declares an Effort + Reasoning pair in its frontmatter. The mapping you approve here determines which model handles each pair.
+>
+> The default combinations are shown in the table below. **You can add new rows** if you have skills that need a combination not listed — just say so before you approve.
+
 ### 2. Characterise each available model
 
 For every model in the available list, reason across these dimensions:
@@ -37,14 +55,7 @@ If you lack benchmark data for a model, reason from its known tier (e.g. "large 
 
 Map each combination used by the project's skills to the single best available model. The combinations are:
 
-| Effort | Reasoning | Used by |
-|---|---|---|
-| THOROUGH | ARCHITECTURAL | `plan`, `calibrate` |
-| THOROUGH | TACTICAL | `audit` |
-| FOCUSED | ARCHITECTURAL | `review`, `analyze` |
-| FOCUSED | TACTICAL | `implement` |
-| RAPID | TACTICAL | `ship` |
-| RAPID | MECHANICAL | `summarize` |
+@skills/configure/calibrate/resources/skill-tier-map.md
 
 Rules for the proposal:
 - Each combination must map to exactly one model from the available list.
@@ -78,7 +89,12 @@ Available models: {{AVAILABLE_MODELS}}
 
 Present the proposal and ask:
 
-> "Does this mapping look right? You can adjust any row before I write it. Reply with the approved table or describe your changes."
+> "Does this mapping look right? You can:
+> - Adjust any row (swap a model, change a tier level)
+> - Add a custom combination (e.g. a new Effort or Reasoning level for a skill you're adding)
+> - Approve as-is
+>
+> Reply with the approved table or describe your changes."
 
 Do not proceed until the user explicitly approves or provides corrections.
 
@@ -109,52 +125,7 @@ Do not modify any other section of `docs/MODEL_TIERS.md`.
 
 After writing `docs/MODEL_TIERS.md`, update every `.claude/commands/*.md` stub that has changed alias. The stub format is:
 
-**Routing rule — only spawn when the target model differs from the current session model:**
-
-- **Spawn up** (`opus`) — target is more capable than the session model; use the Agent routing stub below.
-- **Run locally** (same alias as session, e.g. `sonnet` when session is sonnet) — spawning adds cold-start overhead with no benefit; use the passthrough format (`@skills/... + $ARGUMENTS`).
-- **Route to local model** (`lm-studio`) — target is a local LM Studio model; use the script stub.
-
-**Agent routing stub format (use when spawning up to a more capable model):**
-```markdown
-Route this invocation to a subagent. **Do not execute the skill yourself.**
-
-**Skill:** <name>
-**Tier:** <EFFORT> + <REASONING>
-**Model alias:** <alias>
-
-Steps:
-1. Read `skills/<path>/SKILL.md` using the Read tool.
-2. Spawn an Agent with:
-   - `model`: `"<alias>"`
-   - `prompt`: full content of the skill file[, followed by the arguments below].
-
-[**Arguments:**
-$ARGUMENTS]
-```
-
-**Passthrough format (use when target model == session model):**
-```markdown
-@skills/<path>/SKILL.md
-
-$ARGUMENTS
-```
-
-**Script stub format (use for lm-studio alias):**
-
-_With `$ARGUMENTS` (skills that take user-supplied input):_
-```markdown
-Run via Bash: `python3 scripts/skill_router.py skills/<path>/SKILL.md --args '$ARGUMENTS'`
-If the script exits non-zero (LM Studio unavailable or model not loaded), fall back to reading `skills/<path>/SKILL.md` and executing it yourself.
-
-$ARGUMENTS
-```
-
-_Without `$ARGUMENTS` (skills that need no user input):_
-```markdown
-Run via Bash: `python3 scripts/skill_router.py skills/<path>/SKILL.md`
-If the script exits non-zero (LM Studio unavailable or model not loaded), fall back to reading `skills/<path>/SKILL.md` and executing it yourself.
-```
+@skills/configure/calibrate/resources/stub-formats.md
 
 Only update stubs whose alias changed — do not touch stubs that are already correct.
 
