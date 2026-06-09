@@ -19,6 +19,24 @@ Read `docs/MODEL_TIERS.md` in full. Note:
 - The skill capability map (which skills need which combination)
 - The available models listed under `## Available models`
 
+### 1a. Introduce the tier vocabulary
+
+Present a brief summary of the two axes to the user before proceeding:
+
+> **Effort Tiers** — how much of the codebase a task needs to read and reason over:
+> - **THOROUGH** — codebase-wide analysis; needs maximum context and reasoning depth
+> - **FOCUSED** — scoped to a slice or feature; balances quality and speed
+> - **RAPID** — fast lookups or mechanical transformations; speed over depth
+>
+> **Reasoning Depths** — what kind of thinking the task requires:
+> - **ARCHITECTURAL** — cross-cutting design decisions, dependency analysis, structural trade-offs
+> - **TACTICAL** — implementation correctness, bug spotting, code generation
+> - **MECHANICAL** — formatting, summarisation, templated output
+>
+> Every skill in this project declares an Effort + Reasoning pair in its frontmatter. The mapping you approve here determines which model handles each pair.
+>
+> The default combinations are shown in the table below. **You can add new rows** if you have skills that need a combination not listed — just say so before you approve.
+
 ### 2. Characterise each available model
 
 For every model in the available list, reason across these dimensions:
@@ -71,7 +89,12 @@ Available models: {{AVAILABLE_MODELS}}
 
 Present the proposal and ask:
 
-> "Does this mapping look right? You can adjust any row before I write it. Reply with the approved table or describe your changes."
+> "Does this mapping look right? You can:
+> - Adjust any row (swap a model, change a tier level)
+> - Add a custom combination (e.g. a new Effort or Reasoning level for a skill you're adding)
+> - Approve as-is
+>
+> Reply with the approved table or describe your changes."
 
 Do not proceed until the user explicitly approves or provides corrections.
 
