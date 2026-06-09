@@ -1,25 +1,25 @@
-# CLAUDE.md
+# Agent Guidelines
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents (Claude Code, Codex, Cursor, OpenCode, etc.) working with code in this repository.
 
 ## Project Overview
 
 {{PROJECT_NAME}} — {{PROJECT_DESCRIPTION}}
 
-Full product specifications: @docs/PRODUCT_SPEC.md
+Full product specifications: docs/PRODUCT_SPEC.md
 
 ## Documentation
 
 | File | Purpose |
 |---|---|
-| @docs/PRODUCT_SPEC.md | What the app does — feature requirements |
-| @docs/ARCHITECTURE.md | How the code is organised — layers, directory structure, dependencies |
-| @docs/BACKLOG.md | Known issues and remaining work not yet released |
-| @docs/CHANGELOG.md | Released version history |
-| @docs/VERSIONING.md | Version numbering rules and CI/CD pipeline |
-| @docs/ANALYTICS_EVENTS.md | Analytics event catalogue — events, screen views, and their properties |
-| @docs/MODEL_TIERS.md | Effort Tier and Reasoning Depth vocabulary; active model → tier mapping |
-| @docs/experiments/README.md | Experiment registry index — one `.md` file per experiment |
+| docs/PRODUCT_SPEC.md | What the app does — feature requirements |
+| docs/ARCHITECTURE.md | How the code is organised — layers, directory structure, dependencies |
+| docs/BACKLOG.md | Known issues and remaining work not yet released |
+| docs/CHANGELOG.md | Released version history |
+| docs/VERSIONING.md | Version numbering rules and CI/CD pipeline |
+| docs/ANALYTICS_EVENTS.md | Analytics event catalogue — events, screen views, and their properties |
+| docs/MODEL_TIERS.md | Effort Tier and Reasoning Depth vocabulary; active model → tier mapping |
+| docs/experiments/README.md | Experiment registry index — one `.md` file per experiment |
 | CLAUDE.local.md | Local machine settings (binary paths, MCP auth, model tier mappings) — not committed |
 | skills/configure/calibrate/SKILL.md | One-time setup: propose and approve the model → tier mapping |
 | skills/configure/skill-creator/SKILL.md | Two-mode skill: create a new skill (guided wizard) or refactor an existing one into lean SKILL.md + resources |
