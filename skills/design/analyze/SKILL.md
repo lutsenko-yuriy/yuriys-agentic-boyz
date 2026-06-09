@@ -56,25 +56,7 @@ Mark any property carrying PII risk with `⚠️ PII` and propose a safe alterna
 
 Present the proposal in this format. Omit a section if empty.
 
-```
-## Analytics plan — {{ISSUE_PREFIX}}-XX: <title>
-
-### Screen views
-| Screen name | Trigger | Properties |
-|---|---|---|
-| <name> | <when it fires> | <key: type — description> |
-
-### Events
-| Event name | Trigger | Properties |
-|---|---|---|
-| <name> | <when it fires> | <key: type — description ⚠️ PII if applicable> |
-
-### Not tracked (and why)
-- <moment>: <reason — too granular, not actionable, already covered by existing event>
-
-### Open questions
-- <anything that requires a product decision before finalising>
-```
+@skills/design/analyze/resources/analytics-plan-template.md
 
 Follow the naming conventions already present in `docs/ANALYTICS_EVENTS.md`. If no convention exists yet, use `snake_case` for event names and `screen_<name>` for screen views.
 
