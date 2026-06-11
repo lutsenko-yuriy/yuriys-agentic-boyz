@@ -1,5 +1,7 @@
 # Claude Code local config — not committed
 CLAUDE.local.md
+.claude/settings.local.json
+.claude/worktrees/
 
 # Commit .claude/agents/ — that's the point of this template.
 # If you want agents to be local-only after setup, add:
