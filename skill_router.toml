@@ -1,0 +1,8 @@
+[linear]
+project_id = "c3afdc26-d306-4f72-bdb3-de9b01060d0f"
+
+[llm]
+lmstudio_base = "http://localhost:1234/v1"
+
+[core]
+model_tiers_path = "docs/MODEL_TIERS.md"

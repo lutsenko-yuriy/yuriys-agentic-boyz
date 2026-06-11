@@ -70,7 +70,7 @@ List all files written and the `/command-name` to invoke the skill.
 
 **Script stub** (`needs_session_tools: true`, or `lm-studio` alias):
 ```
-Run via Bash: `python3 scripts/skill_router.py skills/<path>/SKILL.md --args '$ARGUMENTS'`
+Run via Bash: `python3 scripts/skill_router skills/<path>/SKILL.md --args '$ARGUMENTS'`
 If the script exits non-zero (LM Studio unavailable or model not loaded), fall back to reading `skills/<path>/SKILL.md` and executing it yourself.
 
 $ARGUMENTS
