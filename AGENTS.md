@@ -22,6 +22,7 @@ Full product specifications: docs/PRODUCT_SPEC.md
 | docs/experiments/README.md | Experiment registry index — one `.md` file per experiment |
 | CLAUDE.local.md | Local machine settings (binary paths, MCP auth, model tier mappings) — not committed |
 | skills/configure/calibrate/SKILL.md | One-time setup: propose and approve the model → tier mapping |
+| skills/configure/migrate-provider/SKILL.md | Switch a tool role (pm, vcs) to a different provider without changing skill files |
 | skills/configure/skill-creator/SKILL.md | Two-mode skill: create a new skill (guided wizard) or refactor an existing one into lean SKILL.md + resources |
 | skills/configure/style/SKILL.md | Switch communication style: DETAILED, CONCISE, or SCHEMATIC |
 | skills/manage/summarize/SKILL.md | Session-start: fetch and display the backlog |

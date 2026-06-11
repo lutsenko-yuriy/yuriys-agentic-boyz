@@ -142,6 +142,63 @@ echo ""
 AI_COMMIT_TRAILER=$(ask "Commit co-author line (e.g. Co-Authored-By: AI Assistant <ai@example.com>)" "")
 AI_TOOL_CREDIT=$(ask "PR/MR body AI credit line (e.g. 🤖 Generated with Claude Code)" "")
 
+# ── skill_router.toml ────────────────────────────────────────────────────────
+
+echo ""
+echo "── Skill router provider config ─────────────────"
+echo "Mapping your tool choices to provider implementations..."
+echo ""
+
+# Resolve PM provider ID from the PM_TOOL name collected above
+case "${PM_TOOL,,}" in
+  *linear*)                 PM_PROVIDER="linear" ;;
+  *jira*|*atlassian*)       PM_PROVIDER="jira" ;;
+  *"github issues"*|*"gh issues"*) PM_PROVIDER="github_issues" ;;
+  *shortcut*|*clubhouse*)   PM_PROVIDER="shortcut" ;;
+  *notion*)                 PM_PROVIDER="notion" ;;
+  *)                        PM_PROVIDER="" ;;
+esac
+
+if [[ -n "$PM_PROVIDER" ]]; then
+  echo "  PM provider detected: ${PM_PROVIDER}"
+else
+  echo "  No built-in provider found for '${PM_TOOL}'."
+  _available=$(ls scripts/skill_router/providers/ 2>/dev/null | tr '\n' ' ')
+  [[ -n "$_available" ]] && echo "  Available providers: ${_available}"
+  PM_PROVIDER=$(ask "Provider name for ${PM_TOOL} (leave blank to skip)" "")
+fi
+
+# Resolve VCS provider ID from the GIT_HOST name collected above
+case "${GIT_HOST,,}" in
+  *github*) VCS_PROVIDER="github" ;;
+  *gitlab*) VCS_PROVIDER="gitlab" ;;
+  *bitbucket*) VCS_PROVIDER="bitbucket" ;;
+  *)        VCS_PROVIDER="" ;;
+esac
+
+if [[ -n "$VCS_PROVIDER" ]]; then
+  echo "  VCS provider detected: ${VCS_PROVIDER}"
+else
+  VCS_PROVIDER=$(ask "VCS provider name for ${GIT_HOST} (leave blank to skip)" "")
+fi
+
+# Write skill_router.toml
+{
+  echo "# Tool provider configuration — edit [providers] to switch tools without changing skill files."
+  echo "# Add a [<provider_name>] table below for any provider that needs project-specific settings."
+  echo ""
+  echo "[providers]"
+  [[ -n "$PM_PROVIDER" ]]  && echo "pm  = \"${PM_PROVIDER}\""
+  [[ -n "$VCS_PROVIDER" ]] && echo "vcs = \"${VCS_PROVIDER}\""
+  echo ""
+  echo "[llm]"
+  echo "lmstudio_base = \"http://localhost:1234/v1\""
+  echo ""
+  echo "[core]"
+  echo "model_tiers_path = \"docs/MODEL_TIERS.md\""
+} > skill_router.toml
+echo "  → Written skill_router.toml"
+
 # ── substitute ───────────────────────────────────────────────────────────────
 
 echo ""

@@ -1,0 +1,1 @@
+MAX_TOOL_TURNS = 40

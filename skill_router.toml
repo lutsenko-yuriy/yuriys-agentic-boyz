@@ -1,0 +1,17 @@
+[providers]
+# Map tool roles to provider implementations.
+# Skills use role names (pm, vcs, files) in their frontmatter — edit here to switch tools.
+# Built-in providers: linear, github, files
+# Add your own under scripts/skill_router/providers/<name>/provider.py
+pm = "linear"
+vcs = "github"
+
+[linear]
+# project_id is the UUID from your Linear workspace URL
+project_id = "c3afdc26-d306-4f72-bdb3-de9b01060d0f"
+
+[llm]
+lmstudio_base = "http://localhost:1234/v1"
+
+[core]
+model_tiers_path = "docs/MODEL_TIERS.md"
