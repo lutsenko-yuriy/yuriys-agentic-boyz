@@ -62,6 +62,14 @@ _LINEAR_TOOL_NAMES = {s["function"]["name"] for s in _TOOLS_LINEAR}
 class LinearProvider:
     group_name = "linear"
 
+    @classmethod
+    def from_config(cls, settings: dict) -> "LinearProvider":
+        import os
+        return cls(
+            api_key=os.environ.get("LINEAR_API_KEY"),
+            project_id=settings.get("project_id"),
+        )
+
     def __init__(self, api_key: str | None, project_id: str | None):
         self._api_key = api_key
         self._project_id = project_id

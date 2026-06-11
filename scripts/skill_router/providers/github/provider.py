@@ -20,6 +20,10 @@ _GITHUB_TOOL_NAMES = {s["function"]["name"] for s in _TOOLS_GITHUB}
 class GithubProvider:
     group_name = "github"
 
+    @classmethod
+    def from_config(cls, settings: dict) -> "GithubProvider":
+        return cls()
+
     def validate(self) -> str | None:
         return None
 

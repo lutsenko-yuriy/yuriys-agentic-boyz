@@ -3,22 +3,22 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from .config import load_config
+from .config import Config, load_config
 from .core.frontmatter import read_frontmatter
 from .core.model_resolver import lookup_lmstudio_model, normalize_model_name
 from .llm.lm_studio import model_loaded, stream_completion
 from .agentic.loop import chat_completion_with_tools
 from .agentic.registry import ProviderRegistry
-from .providers.linear.provider import LinearProvider
-from .providers.github.provider import GithubProvider
-from .providers.files.provider import FilesProvider
+from .providers import PROVIDER_REGISTRY
 
 
-_PROVIDER_FACTORIES = {
-    "linear": lambda cfg: LinearProvider(cfg.linear_api_key, cfg.linear_project_id),
-    "github": lambda cfg: GithubProvider(),
-    "files": lambda cfg: FilesProvider(project_root="."),
-}
+def _make_provider(role_or_name: str, cfg: Config):
+    """Resolve role or direct provider name → instance, or (None, error_str) on failure."""
+    name = cfg.provider_roles.get(role_or_name, role_or_name)
+    cls = PROVIDER_REGISTRY.get(name)
+    if cls is None:
+        return None, f"Unknown provider '{name}' (from '{role_or_name}') — register it in providers/__init__.py"
+    return cls.from_config(cfg.provider_settings.get(name, {})), None
 
 
 def run(argv: list[str]) -> int:
@@ -52,11 +52,10 @@ def run(argv: list[str]) -> int:
     cfg = load_config()
 
     if context:
-        ctx_factory = _PROVIDER_FACTORIES.get(context)
-        if not ctx_factory:
-            print(f"[skill_router] Unknown context provider '{context}'", file=sys.stderr)
+        ctx_provider, err = _make_provider(context, cfg)
+        if err:
+            print(f"[skill_router] {err}", file=sys.stderr)
             return 2
-        ctx_provider = ctx_factory(cfg)
         err = ctx_provider.validate()
         if err:
             print(f"[skill_router] {err}", file=sys.stderr)
@@ -69,11 +68,10 @@ def run(argv: list[str]) -> int:
 
     providers = []
     for group in tool_groups:
-        factory = _PROVIDER_FACTORIES.get(group)
-        if factory is None:
-            print(f"[skill_router] Unknown tool group '{group}' — skipping", file=sys.stderr)
+        provider, err = _make_provider(group, cfg)
+        if err:
+            print(f"[skill_router] {err} — skipping", file=sys.stderr)
             continue
-        provider = factory(cfg)
         err = provider.validate()
         if err:
             print(f"[skill_router] {err}", file=sys.stderr)

@@ -17,6 +17,10 @@ _FILES_TOOL_NAMES = {s["function"]["name"] for s in _TOOLS_FILES}
 class FilesProvider:
     group_name = "files"
 
+    @classmethod
+    def from_config(cls, settings: dict) -> "FilesProvider":
+        return cls(project_root=".")
+
     def __init__(self, project_root: str = "."):
         self._project_root = project_root
 

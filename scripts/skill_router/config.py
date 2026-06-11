@@ -13,10 +13,13 @@ except ImportError:
 
 @dataclass(frozen=True)
 class Config:
-    linear_api_key: str | None
-    linear_project_id: str | None
+    provider_roles: dict     # role → provider name, e.g. {"pm": "linear", "vcs": "github"}
+    provider_settings: dict  # provider name → settings dict, e.g. {"linear": {"project_id": "..."}}
     lmstudio_base: str
     model_tiers_path: str
+
+
+_RESERVED_TOML_SECTIONS = {"providers", "llm", "core"}
 
 
 def _load_toml(path: Path) -> dict:
@@ -32,12 +35,12 @@ def _load_toml(path: Path) -> dict:
 
 def load_config(toml_path: str = "skill_router.toml") -> Config:
     data = _load_toml(Path(toml_path))
+    roles = data.get("providers", {})
+    # Any top-level table not in reserved sections is provider settings
+    settings = {k: v for k, v in data.items() if k not in _RESERVED_TOML_SECTIONS and isinstance(v, dict)}
     return Config(
-        linear_api_key=os.environ.get("LINEAR_API_KEY"),
-        linear_project_id=(
-            os.environ.get("LINEAR_PROJECT_ID")
-            or data.get("linear", {}).get("project_id")
-        ),
+        provider_roles=roles,
+        provider_settings=settings,
         lmstudio_base=(
             os.environ.get("LMSTUDIO_BASE")
             or data.get("llm", {}).get("lmstudio_base", "http://localhost:1234/v1")

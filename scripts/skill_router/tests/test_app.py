@@ -84,13 +84,13 @@ class TestRun(unittest.TestCase):
     @patch(f"{_MOD}.read_frontmatter", return_value=_FM_WITH_CONTEXT)
     @patch("pathlib.Path.exists", return_value=True)
     def test_context_linear_fetches_and_prepends(self, _exists, _fm, _model, _loaded, mock_stream):
-        # Inject a fake LinearProvider via the factory map so context fetch + format are observable.
         fake_provider = MagicMock()
         fake_provider.validate.return_value = None
         fake_provider.fetch_context.return_value = {"issues": [], "milestones": []}
         fake_provider.format_context.return_value = "=== PRE-FETCHED BACKLOG ===\nstuff\n=== END ==="
-        fake_factory = MagicMock(return_value=fake_provider)
-        with patch.dict(f"{_MOD}._PROVIDER_FACTORIES", {"linear": fake_factory}):
+        fake_cls = MagicMock()
+        fake_cls.from_config.return_value = fake_provider
+        with patch.dict("skill_router.providers.PROVIDER_REGISTRY", {"linear": fake_cls}):
             with patch.dict("os.environ", {"LINEAR_API_KEY": "lin_api_test"}):
                 self._run(["skill_router", "fake/SKILL.md"])
         fake_provider.fetch_context.assert_called_once()
@@ -110,8 +110,9 @@ class TestRun(unittest.TestCase):
         fake_provider = MagicMock()
         fake_provider.validate.return_value = None
         fake_provider.fetch_context.side_effect = Exception("network error")
-        fake_factory = MagicMock(return_value=fake_provider)
-        with patch.dict(f"{_MOD}._PROVIDER_FACTORIES", {"linear": fake_factory}):
+        fake_cls = MagicMock()
+        fake_cls.from_config.return_value = fake_provider
+        with patch.dict("skill_router.providers.PROVIDER_REGISTRY", {"linear": fake_cls}):
             with patch.dict("os.environ", {"LINEAR_API_KEY": "lin_api_test"}):
                 self.assertEqual(self._run(["skill_router", "fake/SKILL.md"]), 1)
 
