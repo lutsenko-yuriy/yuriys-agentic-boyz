@@ -56,7 +56,7 @@ Branch naming: `feature/{{ISSUE_PREFIX}}-XX-<short-description>` (2–4 words, k
 
 **Red — write failing tests first.**
 
-Write tests that describe the expected behaviour before writing any implementation. Run the test command (see `CLAUDE.md` → "Common Commands") to confirm they fail.
+If `draft-scenarios` stubs already exist in the integration test directory for this ticket, use those as the red target — make them green rather than writing separate tests for the same behaviour. Otherwise, write tests that describe the expected behaviour before writing any implementation. Run the test command (see `CLAUDE.md` → "Common Commands") to confirm they fail.
 
 **Green — implement the minimum code to pass.**
 

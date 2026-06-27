@@ -27,9 +27,13 @@ Full product specifications: docs/PRODUCT_SPEC.md
 | skills/configure/style/SKILL.md | Switch communication style: DETAILED, CONCISE, or SCHEMATIC |
 | skills/manage/summarize/SKILL.md | Session-start: fetch and display the backlog |
 | skills/manage/ship/SKILL.md | Post-merge housekeeping: close issues, update docs, bump version, merge |
+| skills/manage/debrief/SKILL.md | Post-ticket retrospective: structured dialog → workflow improvements + knowledge base entry |
+| skills/manage/note/SKILL.md | Capture a quick observation mid-session into `docs/knowledge/notes/` |
 | skills/design/analyze/SKILL.md | Analytics planning: identify events and screen views for a feature |
+| skills/design/brief/SKILL.md | Feature intake: clarifying dialog → scoped PM ticket + glossary update. When called with an existing ticket ID, checks if the description is still current and offers to revise it. |
 | skills/design/plan/SKILL.md | Implementation planning: structured plan from a PM issue |
 | skills/build/implement/SKILL.md | TDD implementation and PR/MR |
+| skills/verify/draft-scenarios/SKILL.md | Pre-implementation scenario drafting: write red integration test stubs from the ticket spec |
 | skills/verify/review/SKILL.md | Architectural PR/MR review |
 | skills/verify/audit/SKILL.md | Runtime and migration PR/MR review |
 
@@ -63,14 +67,22 @@ At the beginning of every new session, before doing anything else:
 1. Ensure your PM tool MCP (if used) is authenticated. If MCP tools for your PM tool are unavailable, run `/mcp` to trigger the OAuth flow — see `CLAUDE.local.md` for setup notes.
 2. Check `CLAUDE.local.md` for an `## Active communication style` section and silently load that style (see `styles/`). If absent, each skill will use its own `output_style` — no global default.
 3. Invoke the `summarize` skill to present the current backlog.
-4. The skill will summarise what has been done and what is remaining, then ask *"What goes into the next release?"*
-5. Wait for the user's answer before proceeding.
+4. The skill will summarise what has been done and what is remaining, then ask *"What goes into the next release? Pick an existing ticket or describe something new."*
+5. Wait for the user's answer before proceeding. If the user wants to describe something new, invoke the `brief` skill before any planning begins.
 
 ## Workflow
 
 Follow TDD: write or update tests **before** implementing the feature or fix. Red → Green → Refactor.
 
 **Only one ticket may be in progress at a time.** Before picking up any new ticket, check the `## In Progress` section at the top of `docs/BACKLOG.md`. If a ticket is listed there, do not start new work until the current ticket is merged and the section is cleared.
+
+**If the user describes a new idea** (not an existing ticket): invoke the `brief` skill to validate the idea and create a ticket before any planning begins:
+
+```
+Invoke the brief skill
+```
+
+Do not jump to `plan` or `implement` for a new idea — `brief` must run first.
 
 **For features with user-visible screens or interactions**: invoke the `analyze` skill first to plan analytics before planning implementation:
 
@@ -90,38 +102,46 @@ The skill will produce a structured plan (dependencies, models, UI changes, test
 
 1. For features with user-facing screens/interactions, invoke `analyze` first and wait for approval.
 2. For large changes, invoke `plan` and wait for plan approval.
-3. Create a new feature branch from the latest `main` and switch to it before writing any code. Always include the issue number after `feature/`:
+3. For every ticket with user-facing flows, invoke `draft-scenarios` to write integration test stubs from the spec before any production code:
+
+   ```
+   Invoke the draft-scenarios skill for {{ISSUE_PREFIX}}-XX: <issue title>
+   ```
+
+   The skill reads the ticket and any plan comment, drafts scenario stubs with `// TODO:` comments, waits for approval, and writes the approved stubs. `implement` fills in driver code and makes them green. Pure infrastructure or CI-only changes with no user-facing flows may skip this step.
+
+4. Create a new feature branch from the latest `main` and switch to it before writing any code. Always include the issue number after `feature/`:
    ```
    git fetch origin
    git checkout -b feature/{{ISSUE_PREFIX}}-XX-<short-description> origin/main
    ```
    If the branch already exists, rebase it onto `origin/main` before writing any code (`git rebase origin/main`). This ensures the PR/MR diff contains only the new work. Mark the ticket as In Progress in `docs/BACKLOG.md`: replace the `_(nothing in progress)_` placeholder with a single bullet linking to the issue.
-4. Write failing tests that describe the expected behaviour.
-5. Implement the minimum code to make the tests pass.
-6. Refactor if needed.
-7. Run tests and linting — fix any failures before proceeding.
-8. Apply formatting in a dedicated commit **before** the functional commit: run your stack's formatter and, if any files changed, stage and commit them separately with a `style:` prefix (e.g. `style: apply formatter`). This keeps style changes reviewable in isolation from logic changes.
-9. Update documentation if affected by the changes:
+5. Write failing tests that describe the expected behaviour. If `draft-scenarios` stubs exist, make them green.
+6. Implement the minimum code to make the tests pass.
+7. Refactor if needed.
+8. Run tests and linting — fix any failures before proceeding.
+9. Apply formatting in a dedicated commit **before** the functional commit: run your stack's formatter and, if any files changed, stage and commit them separately with a `style:` prefix (e.g. `style: apply formatter`). This keeps style changes reviewable in isolation from logic changes.
+10. Update documentation if affected by the changes:
     - `CLAUDE.md` — architecture, conventions, or workflow changed
     - @docs/PRODUCT_SPEC.md — functionality added, removed, or changed
     - @docs/ARCHITECTURE.md — code structure or dependencies changed
     - @docs/VERSIONING.md — CI/CD or versioning process impacted
-10. **Keep the version in sync with `docs/CHANGELOG.md`.** Before committing, check that the version in the project's version file matches the latest `[X.Y.Z]` entry in `CHANGELOG.md`. If a new changelog entry was added in this PR, update the version accordingly. Do not touch the build number — CI manages it.
-11. Commit all changes with a descriptive message.
-12. Push to the remote and open a PR/MR — all in parallel:
+11. **Keep the version in sync with `docs/CHANGELOG.md`.** Before committing, check that the version in the project's version file matches the latest `[X.Y.Z]` entry in `CHANGELOG.md`. If a new changelog entry was added in this PR, update the version accordingly. Do not touch the build number — CI manages it.
+12. Commit all changes with a descriptive message.
+13. Push to the remote and open a PR/MR — all in parallel:
     - Push the branch to the remote.
     - Open a PR/MR.
     - Invoke both review skills simultaneously once the PR/MR is open:
       - `review` for architectural review: `Invoke the review skill for PR/MR #<number>`.
       - `audit` for runtime/launch/migration review: `Invoke the audit skill for PR/MR #<number>`.
     - Inform the user of the PR/MR URL.
-13. Remind the user to compact the context after each commit to keep the conversation lean.
-14. When the user approves the PR/MR, invoke `ship` **before merging**:
+14. Remind the user to compact the context after each commit to keep the conversation lean.
+15. When the user approves the PR/MR, invoke `ship` **before merging**:
     ```
     Invoke the ship skill for PR/MR #<number>
     ```
-    The skill closes the PM issues, adds a CHANGELOG entry, regenerates BACKLOG.md, bumps the version, commits onto the feature branch, pushes, and merges. No separate approval is needed for the version bump.
-15. Clear the context after the PR/MR with the changes is merged.
+    The skill closes the PM issues, adds a CHANGELOG entry, regenerates BACKLOG.md, bumps the version, proposes PRODUCT_SPEC.md and GLOSSARY.md updates, commits onto the feature branch, pushes, and merges. No separate approval is needed for the version bump.
+16. Clear the context after the PR/MR with the changes is merged.
 
 ## Experiments
 

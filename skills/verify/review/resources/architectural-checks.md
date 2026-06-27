@@ -1,0 +1,7 @@
+- **Layer violations** — imports that cross layer boundaries in the wrong direction (e.g. domain importing from data or UI, data importing from UI). See `docs/ARCHITECTURE.md` for the allowed dependency graph.
+- **Vertical-slice boundaries** — code from one feature reaching into another feature's internals rather than through a shared interface or provider.
+- **Naming and placement** — files in directories that do not match their role per `docs/ARCHITECTURE.md`.
+- **Interface coverage** — repository or service interfaces updated when implementations change their contract.
+- **Architectural drift** — patterns inconsistent with the rest of the codebase without justification.
+- **Dependency graph safety** — no circular dependencies in the DI graph / provider graph.
+- **Comment hygiene** — flag any comments that narrate WHAT the code does, duplicate identifiers, or could be removed without confusing a future reader. Only WHY comments are acceptable: hidden constraints, invariants, platform quirks, non-obvious contracts. Flag excess as 🟡.
