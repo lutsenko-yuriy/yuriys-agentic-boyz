@@ -1,5 +1,7 @@
 # Multi-Agent Project Template
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A GitHub template repository that bootstraps a **multi-skill AI workflow** with your choice of project management tool (Linear, Jira, GitHub Issues, etc.) and Git host (GitHub, GitLab, Bitbucket) for any new project in minutes.
 
 ## What's included
