@@ -3,6 +3,10 @@ CLAUDE.local.md
 .claude/settings.local.json
 .claude/worktrees/
 
+# Python
+__pycache__/
+*.pyc
+
 # Commit .claude/agents/ — that's the point of this template.
 # If you want agents to be local-only after setup, add:
 #   .claude/*
