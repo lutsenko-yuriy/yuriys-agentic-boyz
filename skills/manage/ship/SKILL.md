@@ -8,6 +8,8 @@ description: Post-merge housekeeping after a PR/MR is approved. Closes the linke
 
 The project management tool is **{{PM_TOOL}}**. The issue identifier prefix is **{{ISSUE_PREFIX}}**.
 
+@skills/shared/git-cli-safety.md
+
 ---
 
 ## Steps
@@ -50,6 +52,8 @@ Do not rewrite the rest of the file — the milestone sections are the source of
 ### 4. Bump the version
 
 Find the project's version file (check `CLAUDE.md` → "Common Commands" for the stack-specific location, e.g. `pubspec.yaml`, `package.json`, `build.gradle`). Update the version string to match the new `[X.Y.Z]` entry added in step 2.
+
+**No version file exists yet** (common for a project with no build tool chosen, or a script/CLI project that doesn't version itself): skip this step entirely — do not fail or block on it. Note in the step 7 report that there was no version file to bump, so this doesn't silently look skipped.
 
 Do not touch the build number — CI manages it.
 

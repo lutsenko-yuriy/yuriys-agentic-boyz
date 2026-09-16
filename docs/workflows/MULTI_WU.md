@@ -35,12 +35,14 @@ Each WU gets its own branch (`feature/{{ISSUE_PREFIX}}-XX-WUN-<short>`, where N 
 
 Use `[wip]` as the classification tag for all intermediate WU CHANGELOG entries — every WU except the final one. `[wip]` suppresses builds and distribution so testers do not receive partial builds mid-ticket. The final WU uses whichever tag actually reflects what the ticket produced: a user-facing/app-changing tag if it's user-facing (this is when CI builds and distributes, and "What's New" aggregates all user-facing content back to the last published tag), or an internal-only tag if the ticket is pure process/CI/tooling work end-to-end with nothing user-facing to ship.
 
+An intermediate WU's `[wip]` entry goes under a `## [Unreleased]` heading at the top of `docs/CHANGELOG.md` — create that heading if it doesn't exist yet rather than appending into the most recent numbered `## [X.Y.Z]` entry (which is already-released). The final WU's `ship` pass converts `## [Unreleased]` into the real `## [X.Y.Z] — YYYY-MM-DD` entry.
+
 ## WU cycle (WU1 onwards)
 
 For each WU in sequence:
 1. Create a fresh branch from the latest `origin/main` using the branch name from the plan table.
 2. Follow `FEATURE.md` steps 2–11 (UI tests, TDD cycles, validate, format, PR/MR, review loop). The full review loop (step 10) — review, audit, coverage, and user sign-off — is mandatory for every WU PR/MR without exception.
-3. **If this is the final WU** (the one that completes the ticket): invoke `debrief` now (`FEATURE.md` step 12), before shipping — the same order as the single-WU flow. **If this is an intermediate WU**: skip debrief; it runs exactly once, at the final WU.
+3. **If this is the final WU** (the one that completes the ticket): invoke `debrief` now (`FEATURE.md` step 12), before shipping — the same order as the single-WU flow. **This inverts the habit built up over every prior intermediate WU**, which merge immediately on approval with no debrief step at all — nothing about the merge action itself flags that the final WU is different, so check explicitly which WU this is before merging. **If this is an intermediate WU**: skip debrief; it runs exactly once, at the final WU.
    - **If a new WU gets added mid-ticket** (a scope addition discovered during review, not part of the original plan table): immediately update every place that names the "final WU" — the ticket's knowledge-base note and any PM comment framing an earlier WU as final — in the same action that adds the new WU. Do not defer this correction to the next ship/debrief; a stale "final WU" marker is what causes ordering confusion and premature-completion mistakes.
 4. Invoke `ship` (`FEATURE.md` step 13).
 5. **Hard checkpoint:** after `ship` merges, explicitly tell the user to compact context now, before continuing — state it as its own message and wait for it to happen.

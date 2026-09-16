@@ -19,6 +19,8 @@ Read `docs/MODEL_TIERS.md` in full. Note:
 - The skill capability map (which skills need which combination)
 - The available models listed under `## Available models`
 
+Cross-check the capability map's skill list against `skills/*/*/SKILL.md` on disk. Add rows for any skill missing from the table (reading its own frontmatter for effort/reasoning) and remove rows for skills that no longer exist, before proposing the mapping in step 3.
+
 ### 1a. Introduce the tier vocabulary
 
 Present a brief summary of the two axes to the user before proceeding:
