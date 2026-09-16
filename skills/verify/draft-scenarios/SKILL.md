@@ -2,7 +2,7 @@
 name: draft-scenarios
 effort: FOCUSED
 reasoning: TACTICAL
-context: linear
+context: pm
 output_style: CONCISE
 description: Draft scenarios (integration tests) from a ticket description before implementation. Runs after `plan` (if used) and before `implement`. Scenarios are written against the spec — not reverse-engineered from code — so they compile as stubs and give `implement` a concrete target to fill in and make green.
 ---

@@ -136,6 +136,18 @@ echo ""
 AVAILABLE_MODELS=$(ask "Available models (comma-separated)" "${_suggestion}")
 
 echo ""
+echo "── Licensing ─────────────────────────────────────"
+echo "This template ships with an MIT LICENSE file at the repo root."
+echo "Licensing is a legal/ownership decision, not a scaffolding default —"
+echo "decide explicitly rather than carrying it over silently."
+echo ""
+KEEP_LICENSE=$(ask "Keep the bundled MIT LICENSE file? (y/n)" "y")
+if [[ "${KEEP_LICENSE,,}" != "y" ]]; then
+  rm -f LICENSE
+  echo "  → Removed LICENSE. Add your own if/when you decide on one."
+fi
+
+echo ""
 echo "── AI attribution ───────────────────────────────"
 echo "These appear in commit messages and PR/MR bodies."
 echo ""
@@ -227,7 +239,11 @@ echo "  1. Review CLAUDE.md and fill in the 'Common Commands' section for your s
 echo "  2. Fill in docs/PRODUCT_SPEC.md with your feature requirements."
 echo "  3. Fill in docs/ARCHITECTURE.md with your directory structure and layer rules."
 echo "  4. Add your local binary paths and PM/Git tool auth notes to CLAUDE.local.md (not committed)."
-echo "  5. Open Claude Code and start your first session — the product-owner-backlog skill"
+echo "  5. Decide now whether this project needs a real analytics SDK. If yes, add it."
+echo "     If no (or not yet), scaffold a no-op AnalyticsService abstraction anyway, so"
+echo "     the 'analyze' skill's output has a real integration point from the first"
+echo "     feature that needs one, instead of being added reactively later."
+echo "  6. Open Claude Code and start your first session — the product-owner-backlog skill"
 echo "     will present an empty backlog and ask what goes into the first release."
 echo ""
 echo "  PM tool MCP (if applicable): run \`/mcp\` in Claude Code the first time to authenticate."

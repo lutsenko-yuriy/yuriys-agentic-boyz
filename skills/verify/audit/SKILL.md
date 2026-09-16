@@ -8,6 +8,8 @@ description: Runtime and migration review of a PR/MR. Checks for launch-time fai
 
 The Git host is **{{GIT_HOST}}**. The tech stack is **{{STACK}}**.
 
+@skills/shared/git-cli-safety.md
+
 ---
 
 ## What to look for

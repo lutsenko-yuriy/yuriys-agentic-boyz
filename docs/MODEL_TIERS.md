@@ -24,6 +24,8 @@ This project describes what each skill needs from a model using two axes: **Effo
 
 ## Skill capability map
 
+**Keep this in sync with `skills/*/*/SKILL.md` on disk.** The table below can silently drift as skills are added, renamed, or removed — nothing enforces the match automatically. `checkup` and `calibrate` should both verify the skill list here matches the actual `skills/` tree as part of their run, and flag any mismatch for correction.
+
 ### Meta skills — operate on the session and agent layer
 
 | Skill | Effort | Reasoning | Why |
