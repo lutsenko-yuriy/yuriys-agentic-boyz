@@ -557,3 +557,50 @@ class RepoRootTests(unittest.TestCase):
             plain.mkdir()
             with self.assertRaises(onboard.OnboardError):
                 onboard.repo_root(plain)
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+MARKER = onboard.TEMPLATE_MARKER
+
+
+def shipped(rel):
+    return (REPO_ROOT / rel).read_text(encoding="utf-8")
+
+
+def filled(rel):
+    return shipped(rel).replace(MARKER + "\n", "")
+
+
+@needs_toml
+class ShippedTemplateTests(unittest.TestCase):
+    def check(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            return onboard.check(make_repo(tmp, files))
+
+    def test_every_artifact_template_ships_with_marker(self):
+        for rel in onboard.ARTIFACTS:
+            with self.subTest(rel):
+                self.assertTrue(shipped(rel).startswith(MARKER))
+
+    def test_fresh_templates_reported_missing(self):
+        r = self.check({rel: shipped(rel) for rel in onboard.ARTIFACTS})
+        for rel in onboard.ARTIFACTS:
+            self.assertIn("%s is still a template" % rel, r["errors"])
+
+    def test_filled_examples_pass_with_base_standard_cross_check(self):
+        tech = filled("docs/TECH_STACK.md").replace(
+            "| <language> | <version> | <e.g. application code, scripts> |", "| Python | 3.12 | scripts |\n| Shell | POSIX | tooling |"
+        )
+        style = filled("docs/CODE_STYLE.md").replace(
+            "<language>: <style guide link>", "Python: PEP 8. Shell: Google Shell Style Guide."
+        )
+        r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
+        self.assertTrue(r["ok"], r)
+
+    def test_filled_examples_fail_when_base_standard_misses_a_language(self):
+        tech = filled("docs/TECH_STACK.md").replace(
+            "| <language> | <version> | <e.g. application code, scripts> |", "| Python | 3.12 | scripts |\n| Go | 1.22 | tools |"
+        )
+        style = filled("docs/CODE_STYLE.md").replace("<language>: <style guide link>", "Python: PEP 8.")
+        r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
+        self.assertIn("CODE_STYLE Base standard does not cover TECH_STACK language Go", r["errors"])
