@@ -19,7 +19,7 @@ class Config:
     model_tiers_path: str
 
 
-_RESERVED_TOML_SECTIONS = {"providers", "llm", "core"}
+_RESERVED_TOML_SECTIONS = {"providers", "llm", "core", "project"}
 
 
 def _load_toml(path: Path) -> dict:
@@ -38,6 +38,10 @@ def load_config(toml_path: str = "skill_router.toml") -> Config:
     roles = data.get("providers", {})
     # Any top-level table not in reserved sections is provider settings
     settings = {k: v for k, v in data.items() if k not in _RESERVED_TOML_SECTIONS and isinstance(v, dict)}
+    # [project].project_id is the single record (HAB-278); a legacy [linear].project_id is the fallback.
+    project_id = data.get("project", {}).get("project_id") if isinstance(data.get("project"), dict) else None
+    if isinstance(project_id, str) and project_id.strip():
+        settings["linear"] = dict(settings.get("linear", {}), project_id=project_id.strip())
     return Config(
         provider_roles=roles,
         provider_settings=settings,

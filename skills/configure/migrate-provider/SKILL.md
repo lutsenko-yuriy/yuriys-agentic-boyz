@@ -11,7 +11,7 @@ description: Switch a tool role (pm, vcs, files) to a different provider impleme
 
 The skill router maps **role names** (`pm`, `vcs`, `files`) to concrete provider implementations
 in `skill_router.toml`. Switching tools means:
-1. Editing one TOML line (e.g. `pm = "jira"` → `pm = "linear"`)
+1. Editing one TOML line (e.g. `pm = "github"` → `pm = "linear"`)
 2. Setting the new provider's env var
 3. Adding a `[<provider>]` config table if the new provider needs project-specific settings
 
@@ -43,14 +43,20 @@ If not, inform the user:
 > Provider `<name>` is not yet implemented. To add it:
 > 1. Create `scripts/skill_router/providers/<name>/provider.py` with a class that implements `ToolProvider` (and `PMToolProvider` if it's a `pm` role).
 > 2. Register it in `scripts/skill_router/providers/__init__.py`.
+> 3. For a `pm` provider, also add it to `PM_TOOLS` in `scripts/onboard/onboard.py` (provider name → display name).
 > Then re-invoke this skill.
 
 ### 4. Update `skill_router.toml`
 
 Edit the line `<role> = "<old_provider>"` → `<role> = "<new_provider>"` in `[providers]`.
 
-If the new provider needs project-specific settings, add a `[<new_provider>]` table
-and prompt the user for the values (e.g. `project_id` for Linear, `project_key` for Jira).
+If the new provider needs project-specific settings, prompt the user for the values. The project/board ID
+always goes in `[project].project_id`: the router feeds it to the provider. The router still reads a legacy
+`[linear].project_id` when `[project].project_id` is empty, but `check` does not accept that, so move it.
+Other provider-only settings go in a `[<new_provider>]` table.
+
+Then run `python3.12 scripts/onboard/onboard.py check`. It rejects a `pm` missing from `PM_TOOLS` (being in the
+router registry is not enough), and `pm = "linear"` without `[project].project_id`.
 
 ### 5. Print env var instructions
 

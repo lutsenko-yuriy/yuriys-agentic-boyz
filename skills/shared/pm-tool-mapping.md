@@ -5,17 +5,8 @@ When porting to a different PM tool, replace this file — skill logic stays unc
 
 ## Identity
 
-| Setting | Value |
-|---|---|
-| Tool | `{{PM_TOOL}}` (e.g. Linear, Jira, GitHub Issues, GitLab) |
-| Issue prefix | `{{ISSUE_PREFIX}}` (e.g. `APP`, `PROJ`, `HAB`) |
-
-## Workspace IDs
-
-| Setting | Value |
-|---|---|
-| Team / Board ID | `{{TEAM_ID}}` |
-| Project / Space ID | `{{PROJECT_ID}}` |
+Tool, issue prefix and workspace IDs live in `skill_router.toml`: `[providers].pm` is the only record of the PM tool;
+`[project]` holds `issue_prefix`, `pm_project_url`, `team_id` and `project_id`.
 
 ## Operation mapping
 
