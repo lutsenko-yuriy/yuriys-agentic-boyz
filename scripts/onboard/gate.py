@@ -72,7 +72,7 @@ def is_onboarded(root: Path) -> bool:
 def _find_root(data: Dict[str, Any]) -> Path:
     start = data.get("cwd") if isinstance(data.get("cwd"), str) and data.get("cwd") else None
     start = start or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    return Path(onboard._git(Path(start), "rev-parse", "--show-toplevel")).resolve()
+    return onboard.repo_root(Path(start))
 
 
 def bootstrap_target_allowed(root: Path, raw: Any, cwd: Path) -> bool:

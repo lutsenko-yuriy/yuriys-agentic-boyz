@@ -136,9 +136,9 @@ def probe(run_tools: bool = True) -> Dict[str, Any]:
     return data
 
 
-def _git(root: Path, *args: str, allow_fail: bool = False) -> str:
+def _git(root: Path, *args: str, allow_fail: bool = False, timeout: float = 10) -> str:
     res = subprocess.run(
-        ["git", "-C", str(root), *args], capture_output=True, encoding="utf-8", errors="replace", timeout=10
+        ["git", "-C", str(root), *args], capture_output=True, encoding="utf-8", errors="replace", timeout=timeout
     )
     if res.returncode != 0:
         if allow_fail:
@@ -461,8 +461,13 @@ def apply(root: Path) -> Dict[str, Any]:
     }
 
 
-def marker_path(root: Path) -> Path:
-    common = Path(_git(root, "rev-parse", "--git-common-dir"))
+def repo_root(start: Path, timeout: float = 10) -> Path:
+    """The resolved git toplevel containing `start`; raises OnboardError when it is not in a repo."""
+    return Path(_git(start, "rev-parse", "--show-toplevel", timeout=timeout)).resolve()
+
+
+def marker_path(root: Path, timeout: float = 10) -> Path:
+    common = Path(_git(root, "rev-parse", "--git-common-dir", timeout=timeout))
     if not common.is_absolute():
         common = root / common
     return common.resolve() / "yab" / "onboarded"
@@ -490,7 +495,7 @@ def mark(root: Path, force: bool) -> int:
 
 def _resolve_root(arg: Optional[str]) -> Path:
     start = Path(arg).resolve() if arg else Path(os.getcwd())
-    top = Path(_git(start, "rev-parse", "--show-toplevel")).resolve()
+    top = repo_root(start)
     # git walks up to an enclosing repo; an explicit --root must be the toplevel itself.
     if arg and not os.path.samefile(str(top), str(start)):
         raise OnboardError("--root %s is not a repo toplevel (enclosing toplevel: %s)" % (start, top))
