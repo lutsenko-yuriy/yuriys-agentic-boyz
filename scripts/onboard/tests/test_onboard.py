@@ -224,6 +224,8 @@ class CheckTests(unittest.TestCase):
             "file://github.com/lutsenko-yuriy/yuriys-agentic-boyz",
             "github.com/lutsenko-yuriy/yuriys-agentic-boyz",
             "https://github.com/group/lutsenko-yuriy/yuriys-agentic-boyz",
+            "alias:x@github.com:lutsenko-yuriy/yuriys-agentic-boyz",
+            "ext::git@github.com:lutsenko-yuriy/yuriys-agentic-boyz",
         ]:
             r = self.check({".yab-template": YAB_SENTINEL}, origin=origin)
             self.assertFalse(r["template_mode"], origin)
@@ -237,6 +239,9 @@ class CheckTests(unittest.TestCase):
             "HTTPS://user@github.com:8443/lutsenko-yuriy/yuriys-agentic-boyz.git//",
             "git@github.com:/lutsenko-yuriy/yuriys-agentic-boyz",
             "https://github.com/lutsenko-yuriy/yuriys-agentic-boyz?x=1",
+            "github.com:lutsenko-yuriy/yuriys-agentic-boyz",
+            "git+ssh://git@GitHub.com/lutsenko-yuriy/yuriys-agentic-boyz.GIT",
+            "ssh+git://git@github.com/lutsenko-yuriy/yuriys-agentic-boyz",
         ]:
             self.assertTrue(self.check({".yab-template": YAB_SENTINEL}, origin=origin)["template_mode"], origin)
 
@@ -248,6 +253,15 @@ class CheckTests(unittest.TestCase):
             r = run_check(root)
         self.assertFalse(r["template_mode"])
         self.assertFalse(r["ok"])
+
+    def test_sentinel_without_origin_is_reported(self):
+        r = self.check({".yab-template": YAB_SENTINEL})
+        self.assertFalse(r["template_mode"])
+        self.assertIn(".yab-template", self.msgs(r))
+
+    def test_sentinel_repo_is_case_insensitive(self):
+        r = self.check({".yab-template": YAB_SENTINEL.upper().replace("REPO=", "repo=")}, origin=YAB_ORIGIN)
+        self.assertTrue(r["template_mode"])
 
     def test_empty_remote_url_does_not_crash(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -329,6 +343,11 @@ class CheckTests(unittest.TestCase):
         tech = ("## Languages\n\n| Note: one row per language |\n| Versions are minimums |\n\n| Language | Version |\n|:---|---:|\n"
                 "| 🐍 Python | 3 |\n| .NET | 8 |\n| Visual Basic | 6 |\n| 3.12 | x |\n")
         self.assertEqual(onboard._languages(tech), ["Python", ".NET", "Visual Basic"])
+
+    def test_version_notations_stripped_from_names(self):
+        tech = ("## Languages\n\n| Language | Version |\n|---|---|\n| Dart ^3.6.0 | |\n| Python >=3.11 | |\n"
+                "| Kotlin 2.0+ | |\n| Python3.12 | |\n| Node v20 LTS | |\n| 3.x | |\n| v20 | |\n| LTS | |\n")
+        self.assertEqual(onboard._languages(tech), ["Dart", "Python", "Kotlin", "Python", "Node"])
 
     def test_version_suffix_counts_as_mention(self):
         tech = GOOD_TECH.replace("| Dart | 3.6 |", "| C++ | 17 |\n| Python | 3 |")

@@ -148,12 +148,16 @@ def _languages(tech_stack: str) -> List[str]:
     names = []
     for row in rows:
         cell = re.sub(r"[*`]|\(.*?\)", "", row.strip("|").split("|")[0])
-        for part in re.split(r"[/,]", cell):
-            # Drop leading emoji/punctuation (keeping ".NET") and a trailing version like "3.12" or "v17".
-            name = re.sub(r"\s+v?\d[\w.]*$", "", re.sub(r"^[^A-Za-z.]+", "", part).strip())
-            if re.match(r"\.?[A-Za-z]", name):
-                names.append(name)
+        names.extend(n for n in (_lang_name(part) for part in re.split(r"[/,]", cell)) if n)
     return names
+
+
+def _lang_name(part: str) -> str:
+    """"Dart ^3.6.0" -> "Dart", "Python3.12" -> "Python", "Node v20 LTS" -> "Node"; a version-only cell -> ""."""
+    words = re.sub(r"^[^A-Za-z.]+", "", part).split()
+    name = " ".join(w for w in words if not re.match(r"^(?:[\^~<>=v]*\d|LTS$|x$)", w, re.IGNORECASE))
+    name = re.sub(r"(?<=[A-Za-z+#])\d[\d.x]*\+?$", "", name)
+    return name if re.match(r"\.[A-Z]|[A-Za-z]", name) else ""
 
 
 def _mentions(text: str, word: str) -> bool:
@@ -172,7 +176,8 @@ def _scanned(rel: str) -> bool:
 def _remote_id(url: str) -> Optional[tuple]:
     """(host, path) for network URLs (scheme://… or scp-style user@host:path); local and file:// remotes give None."""
     m = re.match(
-        r"^(?:(?:https?|ssh|git)://(?:[^@/]+@)?([^/:?#]+)(?::\d+)?/|[^@/\s]+@([^/:\s]+):)/*([^?#]+)",
+        r"^(?:(?:https?|ssh|git|git\+ssh|ssh\+git)://(?:[^@/]+@)?([^/:?#]+)(?::\d+)?/|(?:[^@/:\s]+@)?([^/:\s]+):)"
+        r"/*([^?#]+)",
         url.strip(), re.IGNORECASE,
     )
     if not m:
