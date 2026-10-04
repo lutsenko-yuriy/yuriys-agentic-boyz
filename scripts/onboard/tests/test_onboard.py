@@ -604,3 +604,18 @@ class ShippedTemplateTests(unittest.TestCase):
         style = filled("docs/CODE_STYLE.md").replace("<language>: <style guide link>", "Python: PEP 8.")
         r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
         self.assertIn("CODE_STYLE Base standard does not cover TECH_STACK language Go", r["errors"])
+
+
+class PlaceholderCoverageTests(unittest.TestCase):
+    def test_every_placeholder_is_fillable_or_in_a_bootstrap_file(self):
+        from scripts.onboard import gate
+
+        fillable = set(onboard.PLACEHOLDER_FIELDS) | {"PM_TOOL"}
+        tracked = git(REPO_ROOT, "ls-files").splitlines()
+        stranded = []
+        for rel in tracked:
+            if rel in ("setup.sh", "README.md") or not onboard._scanned(rel) or rel in gate.BOOTSTRAP_PATHS:
+                continue
+            text = onboard._read_regular(REPO_ROOT / rel) or ""
+            stranded += ["%s %s" % (rel, m) for m in onboard.PLACEHOLDER_RE.findall(text) if m[2:-2] not in fillable]
+        self.assertEqual(stranded, [])
