@@ -205,6 +205,8 @@ class CheckTests(unittest.TestCase):
     def test_linear_requires_project_id(self):
         r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"\n', "")})
         self.assertIn("project.project_id is empty", self.msgs(r))
+        legacy = GOOD_TOML.replace('project_id = "p1"\n', "") + '\n[linear]\nproject_id = "p1"\n'
+        self.assertIn("move a legacy [linear].project_id there", self.msgs(self.check({"skill_router.toml": legacy})))
         r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"\n', "").replace('"linear"', '"github"')})
         self.assertNotIn("project.project_id", self.msgs(r))
 

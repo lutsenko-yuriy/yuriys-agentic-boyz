@@ -22,7 +22,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 PREFIX_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]{1,9}$")
 PREFIX_REJECT = {"NA"}
@@ -243,6 +243,17 @@ def _read_config(root: Path) -> tuple:
     return project, providers
 
 
+def _pm(providers: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    """The normalised [providers].pm ("" when unset) and the error, if any; shared by check and apply."""
+    raw = providers.get("pm", "")
+    if not isinstance(raw, str):
+        return "", "providers.pm must be a string"
+    pm = raw.strip()
+    if pm and pm not in PM_TOOLS:
+        return pm, "providers.pm %r must be one of %s" % (pm, ", ".join(sorted(PM_TOOLS)))
+    return pm, None
+
+
 def _check_config(root: Path, errors: List[str]) -> str:
     if not (root / "skill_router.toml").is_file():
         errors.append("skill_router.toml missing")
@@ -254,13 +265,14 @@ def _check_config(root: Path, errors: List[str]) -> str:
     prefix = str(project.get("issue_prefix", "")).strip()
     if prefix and not valid_prefix(prefix):
         errors.append("project.issue_prefix %r is invalid (letters/digits, 2-10 chars, not N/A)" % prefix)
-    pm = str(providers.get("pm", "")).strip()
-    if not pm:
+    pm, pm_error = _pm(providers)
+    if pm_error:
+        errors.append(pm_error)
+    elif not pm:
         errors.append("providers.pm is empty")
-    elif pm not in PM_TOOLS:
-        errors.append("providers.pm %r must be one of %s" % (pm, ", ".join(sorted(PM_TOOLS))))
     elif pm == "linear" and not str(project.get("project_id", "")).strip():
-        errors.append("project.project_id is empty (required when providers.pm is linear)")
+        errors.append("project.project_id is empty (required when providers.pm is linear; "
+                      "move a legacy [linear].project_id there)")
     return prefix
 
 
@@ -399,12 +411,9 @@ def apply(root: Path) -> Dict[str, Any]:
     if _template_mode(root, []):
         raise Refused("this is the YAB template itself (.yab-template, origin is YAB): apply would fill it in; refusing")
     project, providers = _read_config(root)
-    pm = providers.get("pm", "")
-    if not isinstance(pm, str) or pm.strip() not in dict(PM_TOOLS, **{"": ""}):
-        raise OnboardError(
-            "skill_router.toml: providers.pm %r must be one of %s (or empty)" % (pm, ", ".join(sorted(PM_TOOLS)))
-        )
-    pm = pm.strip()
+    pm, pm_error = _pm(providers)
+    if pm_error:
+        raise OnboardError("skill_router.toml: %s" % pm_error)
     keep_licence = project.get("keep_licence", True)
     if not isinstance(keep_licence, bool):
         raise OnboardError("skill_router.toml: project.keep_licence must be true or false")
