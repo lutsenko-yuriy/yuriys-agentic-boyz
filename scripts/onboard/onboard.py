@@ -151,7 +151,7 @@ def _languages(tech_stack: str) -> List[str]:
         for part in re.split(r"[/,]", cell):
             # Drop leading emoji/punctuation (keeping ".NET") and a trailing version like "3.12" or "v17".
             name = re.sub(r"\s+v?\d[\w.]*$", "", re.sub(r"^[^A-Za-z.]+", "", part).strip())
-            if name:
+            if re.match(r"\.?[A-Za-z]", name):
                 names.append(name)
     return names
 
@@ -170,26 +170,34 @@ def _scanned(rel: str) -> bool:
 
 
 def _remote_id(url: str) -> Optional[tuple]:
-    m = re.match(r"^(?:[a-z+]+://)?(?:[^@/]+@)?([^/:]+)(?::\d+)?[:/](.+?)(?:\.git)?/?$", url.strip())
-    return (m.group(1).lower(), m.group(2).lower()) if m else None
+    """(host, path) for network URLs (scheme://… or scp-style user@host:path); local and file:// remotes give None."""
+    m = re.match(
+        r"^(?:(?:https?|ssh|git)://(?:[^@/]+@)?([^/:?#]+)(?::\d+)?/|[^@/\s]+@([^/:\s]+):)/*([^?#]+)",
+        url.strip(), re.IGNORECASE,
+    )
+    if not m:
+        return None
+    host = (m.group(1) or m.group(2)).lower()
+    path = re.sub(r"\.git$", "", m.group(3).rstrip("/"), flags=re.IGNORECASE).lower()
+    return {"ssh.github.com": "github.com"}.get(host, host), path
 
 
 def _template_mode(root: Path, errors: List[str]) -> bool:
-    """The sentinel only counts in YAB itself (or a fork with YAB as a remote); an inherited copy must not skip setup.
+    """The sentinel only counts when origin is YAB; adopters commonly keep YAB as `upstream`, so other remotes don't.
 
-    A plain `git clone` of YAB that is being turned into a new project still looks like YAB until its origin changes.
+    A plain `git clone` of YAB being turned into a new project looks like YAB until its origin changes; in a YAB fork
+    a human marks with `mark --force` from a terminal.
     """
     sentinel = root / ".yab-template"
     if not sentinel.exists():
         return False
     fields = dict(ln.split("=", 1) for ln in sentinel.read_text(encoding="utf-8", errors="replace").splitlines() if "=" in ln)
-    urls = _git(root, "config", "--get-regexp", r"^remote\..*\.url$", allow_fail=True).splitlines()
-    remotes = {_remote_id(ln.split(None, 1)[1]) for ln in urls if " " in ln}
-    if fields.get("repo", "").strip().lower() == YAB_REPO and (YAB_HOST, YAB_REPO) in remotes:
+    origin = _git(root, "remote", "get-url", "origin", allow_fail=True)
+    if fields.get("repo", "").strip().lower() == YAB_REPO and _remote_id(origin) == (YAB_HOST, YAB_REPO):
         return True
     errors.append(
-        ".yab-template present but no remote is %s/%s: delete it if this project was created from YAB, "
-        "or add YAB as a remote if this is a fork" % (YAB_HOST, YAB_REPO)
+        ".yab-template present but origin is not %s/%s: delete it if this project was created from YAB "
+        "(in a YAB fork, run `mark --force` from a terminal)" % (YAB_HOST, YAB_REPO)
     )
     return False
 

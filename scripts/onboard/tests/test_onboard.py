@@ -221,6 +221,9 @@ class CheckTests(unittest.TestCase):
             "https://github.com/lutsenko-yuriy/yuriys-agentic-boyz-playground.git",
             "https://gitlab.com/mirror/lutsenko-yuriy/yuriys-agentic-boyz.git",
             "git@github.com:someone/yuriys-agentic-boyz.git",
+            "file://github.com/lutsenko-yuriy/yuriys-agentic-boyz",
+            "github.com/lutsenko-yuriy/yuriys-agentic-boyz",
+            "https://github.com/group/lutsenko-yuriy/yuriys-agentic-boyz",
         ]:
             r = self.check({".yab-template": YAB_SENTINEL}, origin=origin)
             self.assertFalse(r["template_mode"], origin)
@@ -230,14 +233,27 @@ class CheckTests(unittest.TestCase):
             "git@github.com:lutsenko-yuriy/yuriys-agentic-boyz.git",
             "https://github.com/Lutsenko-Yuriy/Yuriys-Agentic-Boyz",
             "ssh://git@github.com/lutsenko-yuriy/yuriys-agentic-boyz.git",
+            "ssh://git@ssh.github.com:443/lutsenko-yuriy/yuriys-agentic-boyz.git",
+            "HTTPS://user@github.com:8443/lutsenko-yuriy/yuriys-agentic-boyz.git//",
+            "git@github.com:/lutsenko-yuriy/yuriys-agentic-boyz",
+            "https://github.com/lutsenko-yuriy/yuriys-agentic-boyz?x=1",
         ]:
             self.assertTrue(self.check({".yab-template": YAB_SENTINEL}, origin=origin)["template_mode"], origin)
 
-    def test_fork_with_upstream_remote_is_template_mode(self):
+    def test_yab_as_upstream_only_is_not_template_mode(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_repo(tmp, {".yab-template": YAB_SENTINEL}, "git@github.com:someone/yuriys-agentic-boyz.git")
+            root = make_repo(tmp, {".yab-template": YAB_SENTINEL, "AGENTS.md": "{{PROJECT_NAME}}"},
+                             "https://github.com/lutsenko-yuriy/my-new-app.git")
             git(root, "remote", "add", "upstream", YAB_ORIGIN)
-            self.assertTrue(run_check(root)["template_mode"])
+            r = run_check(root)
+        self.assertFalse(r["template_mode"])
+        self.assertFalse(r["ok"])
+
+    def test_empty_remote_url_does_not_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {".yab-template": YAB_SENTINEL})
+            git(root, "config", "remote.origin.url", "")
+            self.assertFalse(run_check(root)["template_mode"])
 
     def test_sentinel_content_must_name_yab_exactly(self):
         for content in ["", "repo=lutsenko-yuriy/yuriys-agentic-boyz-x\n"]:
@@ -310,7 +326,8 @@ class CheckTests(unittest.TestCase):
         self.assertIn("language JavaScript", self.msgs(r))
 
     def test_language_names_parsed_fully(self):
-        tech = "## Languages\n\nIntro line\n\n| Language | Version |\n|---|---|\n| 🐍 Python | 3 |\n| .NET | 8 |\n| Visual Basic | 6 |\n"
+        tech = ("## Languages\n\n| Note: one row per language |\n| Versions are minimums |\n\n| Language | Version |\n|:---|---:|\n"
+                "| 🐍 Python | 3 |\n| .NET | 8 |\n| Visual Basic | 6 |\n| 3.12 | x |\n")
         self.assertEqual(onboard._languages(tech), ["Python", ".NET", "Visual Basic"])
 
     def test_version_suffix_counts_as_mention(self):
