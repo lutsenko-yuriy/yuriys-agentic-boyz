@@ -33,8 +33,11 @@ KNOWN_PLACEHOLDERS = [
 ]
 # Lookarounds keep brace-escapes like f"{{{X}}}" or ${{X}} from matching.
 PLACEHOLDER_RE = re.compile(r"(?<![{$])\{\{(?:%s)\}\}(?!\})" % "|".join(KNOWN_PLACEHOLDERS))
-# Historical text may quote placeholders legitimately.
-SCAN_SKIP_PREFIXES = ("scripts/onboard/", "docs/knowledge/", "docs/CHANGELOG.md")
+# Historical text may quote placeholders legitimately; knowledge-base READMEs/TEMPLATEs are real templates.
+SCAN_SKIP_DIRS = ("scripts/onboard/", "docs/knowledge/")
+SCAN_SKIP_FILES = {"docs/CHANGELOG.md"}
+SCAN_KEEP_NAMES = {"README.md", "TEMPLATE.md"}
+YAB_REPO = "lutsenko-yuriy/yuriys-agentic-boyz"
 MAX_SCAN_BYTES = 1_000_000
 TEMPLATE_MARKER = "<!-- yab:template -->"
 ARTIFACTS = ["docs/TECH_STACK.md", "docs/CODE_STYLE.md", "docs/CONSTRAINTS.md"]
@@ -111,7 +114,9 @@ def probe(run_tools: bool = True) -> Dict[str, Any]:
 
 
 def _git(root: Path, *args: str, allow_fail: bool = False) -> str:
-    res = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=10)
+    res = subprocess.run(
+        ["git", "-C", str(root), *args], capture_output=True, encoding="utf-8", errors="replace", timeout=10
+    )
     if res.returncode != 0:
         if allow_fail:
             return ""
@@ -137,12 +142,39 @@ def _section(text: str, heading: str) -> str:
 
 def _languages(tech_stack: str) -> List[str]:
     rows = [ln for ln in _section(tech_stack, "Languages").splitlines() if ln.strip().startswith("|")]
-    names = [r.strip().strip("|").split("|")[0].strip().strip("`*") for r in rows[2:]]
-    return [part.strip() for n in names for part in re.split(r"[/,]", n) if part.strip()]
+    cells = [re.sub(r"[*`]", "", r.strip().strip("|").split("|")[0]) for r in rows[2:]]
+    names = []
+    for cell in cells:
+        for part in re.split(r"[/,]", re.sub(r"\(.*?\)", "", cell)):
+            m = re.match(r"\s*([A-Za-z][\w+#.-]*)", part)
+            if m:
+                names.append(m.group(1).rstrip(".-"))
+    return names
 
 
 def _mentions(text: str, word: str) -> bool:
-    return re.search(r"(?<![A-Za-z0-9])%s(?![A-Za-z0-9])" % re.escape(word), text, re.IGNORECASE) is not None
+    # +, # and - count as part of a name so "C" is not covered by "C++" or "Objective-C".
+    return re.search(r"(?<![\w+#-])%s(?![\w+#-])" % re.escape(word), text, re.IGNORECASE) is not None
+
+
+def _scanned(rel: str) -> bool:
+    if rel in SCAN_SKIP_FILES:
+        return False
+    return not rel.startswith(SCAN_SKIP_DIRS) or (
+        rel.startswith("docs/knowledge/") and rel.rsplit("/", 1)[-1] in SCAN_KEEP_NAMES
+    )
+
+
+def _template_mode(root: Path, errors: List[str]) -> bool:
+    """The sentinel only counts in YAB itself; a copy that inherited it must not skip setup."""
+    sentinel = root / ".yab-template"
+    if not sentinel.exists():
+        return False
+    origin = _git(root, "remote", "get-url", "origin", allow_fail=True)
+    if YAB_REPO in sentinel.read_text(encoding="utf-8", errors="replace") and YAB_REPO in origin:
+        return True
+    errors.append(".yab-template present outside the YAB repo (origin %r); delete it" % (origin or "none"))
+    return False
 
 
 def _check_config(root: Path, errors: List[str]) -> str:
@@ -150,27 +182,32 @@ def _check_config(root: Path, errors: List[str]) -> str:
     if not path.is_file():
         errors.append("skill_router.toml missing")
         return ""
-    cfg = load_toml(path)
-    project = cfg.get("project", {})
+    try:
+        cfg = load_toml(path)
+    except ValueError as e:
+        raise OnboardError("skill_router.toml: %s" % e)
+    project, providers = cfg.get("project", {}), cfg.get("providers", {})
+    if not isinstance(project, dict) or not isinstance(providers, dict):
+        raise OnboardError("skill_router.toml: [project] and [providers] must be tables")
     for field in REQUIRED_PROJECT_FIELDS:
         if not str(project.get(field, "")).strip():
             errors.append("project.%s is empty" % field)
     prefix = str(project.get("issue_prefix", "")).strip()
     if prefix and not valid_prefix(prefix):
         errors.append("project.issue_prefix %r is invalid (letters/digits, 2-10 chars, not N/A)" % prefix)
-    if not str(cfg.get("providers", {}).get("pm", "")).strip():
+    if not str(providers.get("pm", "")).strip():
         errors.append("providers.pm is empty")
     return prefix
 
 
 def check(root: Path) -> Dict[str, Any]:
     """In template mode (YAB itself) unfilled placeholders, template artifacts and empty config are expected."""
-    template_mode = (root / ".yab-template").exists()
     errors: List[str] = []
+    template_mode = _template_mode(root, errors)
     warnings: List[str] = []
     placeholders: Dict[str, List[str]] = {}
     for rel in _tracked_files(root):
-        if rel.startswith(SCAN_SKIP_PREFIXES):
+        if not _scanned(rel):
             continue
         try:
             text = _read_regular(root / rel)
@@ -232,7 +269,7 @@ def marker_path(root: Path) -> Path:
 
 def mark(root: Path, force: bool) -> int:
     # --force is for a human at a terminal; Claude's Bash has no TTY, so it cannot bypass the gate this way.
-    if force and not sys.stdin.isatty():
+    if force and not (sys.stdin is not None and sys.stdin.isatty()):
         sys.stderr.write("onboard: --force is only allowed from an interactive terminal\n")
         return 1
     if not force and not check(root)["ok"]:
@@ -251,9 +288,12 @@ def mark(root: Path, force: bool) -> int:
 
 
 def _resolve_root(arg: Optional[str]) -> Path:
-    if arg:
-        return Path(arg).resolve()
-    return Path(_git(Path(os.getcwd()), "rev-parse", "--show-toplevel")).resolve()
+    start = Path(arg).resolve() if arg else Path(os.getcwd())
+    top = Path(_git(start, "rev-parse", "--show-toplevel")).resolve()
+    # git walks up to an enclosing repo; an explicit --root must be the toplevel itself.
+    if arg and top != start:
+        raise OnboardError("--root %s is not a repo toplevel (enclosing toplevel: %s)" % (start, top))
+    return top
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -274,7 +314,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(json.dumps(result, indent=2))
             return 0 if result["ok"] else 1
         return mark(root, args.force)
-    except (OnboardError, ValueError, OSError, subprocess.SubprocessError) as e:
+    except (OnboardError, OSError, subprocess.SubprocessError) as e:
         sys.stderr.write("onboard: %s\n" % e)
         return 3
 

@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -117,9 +118,15 @@ def git(root, *args):
     return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, text=True).stdout
 
 
-def make_repo(tmp, files=None):
+YAB_ORIGIN = "https://github.com/lutsenko-yuriy/yuriys-agentic-boyz.git"
+YAB_SENTINEL = "repo=lutsenko-yuriy/yuriys-agentic-boyz\n"
+
+
+def make_repo(tmp, files=None, origin=None):
     root = Path(tmp)
     git(root, "init", "-q")
+    if origin:
+        git(root, "remote", "add", "origin", origin)
     git(root, "config", "user.email", "t@t")
     git(root, "config", "user.name", "t")
     base = {
@@ -146,9 +153,9 @@ def run_check(root):
 
 @needs_toml
 class CheckTests(unittest.TestCase):
-    def check(self, files=None):
+    def check(self, files=None, origin=None):
         with tempfile.TemporaryDirectory() as tmp:
-            return run_check(make_repo(tmp, files))
+            return run_check(make_repo(tmp, files, origin))
 
     def msgs(self, result, key="errors"):
         return " | ".join(result[key])
@@ -206,20 +213,27 @@ class CheckTests(unittest.TestCase):
         self.assertNotIn("INDEX.md", self.msgs(r, "warnings"))
 
     def test_template_mode_sentinel(self):
-        r = self.check({".yab-template": ""})
+        r = self.check({".yab-template": YAB_SENTINEL}, origin=YAB_ORIGIN)
         self.assertTrue(r["template_mode"])
+
+    def test_inherited_sentinel_is_not_template_mode(self):
+        r = self.check({".yab-template": YAB_SENTINEL, "AGENTS.md": "{{PROJECT_NAME}}"},
+                       origin="git@github.com:someone/new-app.git")
+        self.assertFalse(r["template_mode"])
+        self.assertFalse(r["ok"])
+        self.assertIn(".yab-template", self.msgs(r))
 
     def test_template_mode_tolerates_template_state(self):
         r = self.check({
-            ".yab-template": "",
+            ".yab-template": YAB_SENTINEL,
             "AGENTS.md": "{{PROJECT_NAME}}",
             "docs/TECH_STACK.md": TEMPLATE_DOC,
             "skill_router.toml": "[providers]\n",
-        })
+        }, origin=YAB_ORIGIN)
         self.assertTrue(r["ok"], r)
 
     def test_template_mode_still_requires_artifacts(self):
-        r = self.check({".yab-template": "", "docs/CONSTRAINTS.md": None})
+        r = self.check({".yab-template": YAB_SENTINEL, "docs/CONSTRAINTS.md": None}, origin=YAB_ORIGIN)
         self.assertFalse(r["ok"])
 
     def test_only_known_placeholders_count(self):
@@ -233,6 +247,16 @@ class CheckTests(unittest.TestCase):
     def test_history_files_skipped(self):
         r = self.check({"docs/knowledge/notes/HL-1.md": "`{{ISSUE_PREFIX}}-XX`", "docs/CHANGELOG.md": "{{STACK}}"})
         self.assertTrue(r["ok"], r)
+
+    def test_knowledge_templates_and_readmes_still_scanned(self):
+        r = self.check({
+            "docs/knowledge/notes/TEMPLATE.md": "{{ISSUE_PREFIX}}-XX",
+            "docs/knowledge/decisions/README.md": "{{ISSUE_PREFIX}}",
+            "docs/CHANGELOG.md.bak": "{{STACK}}",
+        })
+        self.assertEqual(sorted(r["placeholders"]),
+                         ["docs/CHANGELOG.md.bak", "docs/knowledge/decisions/README.md",
+                          "docs/knowledge/notes/TEMPLATE.md"])
 
     def test_symlinks_not_followed(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
@@ -253,6 +277,16 @@ class CheckTests(unittest.TestCase):
         tech = GOOD_TECH.replace("| Dart | 3.6 |", "| TypeScript / JavaScript | 5 |")
         style = "## Base standard\n\nTypeScript and JavaScript: ESLint.\n"
         self.assertTrue(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style})["ok"])
+
+    def test_language_cell_markup_and_qualifiers(self):
+        tech = GOOD_TECH.replace("| Dart | 3.6 |", "| Dart (Flutter) | 3.6 |\n| **Python** 3.12 | x |")
+        style = "## Base standard\n\nDart: Effective Dart. Python: PEP 8.\n"
+        self.assertTrue(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style})["ok"])
+
+    def test_c_not_covered_by_cpp_or_objective_c(self):
+        tech = GOOD_TECH.replace("| Dart | 3.6 |", "| C | 17 |")
+        style = "## Base standard\n\nC++ Core Guidelines; Objective-C conventions.\n"
+        self.assertIn("language C", self.msgs(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style})))
 
     def test_missing_languages_section(self):
         r = self.check({"docs/TECH_STACK.md": "# Stack\n"})
@@ -282,6 +316,36 @@ class CheckTests(unittest.TestCase):
             with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", new_callable=io.StringIO) as err:
                 self.assertEqual(onboard.main(["--root", str(root), "check"]), 3)
             self.assertIn("onboard:", err.getvalue())
+
+    def test_wrong_toml_shape_exit_3_naming_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": 'project = "x"\nproviders = 1\n'})
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+                self.assertEqual(onboard.main(["--root", str(root), "check"]), 3)
+            self.assertIn("skill_router.toml", err.getvalue())
+
+    def test_non_utf8_tracked_filename_does_not_abort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp)
+            try:
+                with open(os.path.join(os.fsencode(str(root)), b"bad\xff.md"), "wb") as f:
+                    f.write(b"x")
+            except OSError:
+                self.skipTest("filesystem rejects non-UTF-8 names")
+            git(root, "add", "-A")
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(onboard.main(["--root", str(root), "check"]), 0)
+
+    def test_root_inside_enclosing_repo_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outer = make_repo(tmp)
+            inner = outer / "plain"
+            inner.mkdir()
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", new_callable=io.StringIO), mock.patch(
+                "sys.stdin.isatty", return_value=True
+            ):
+                self.assertEqual(onboard.main(["--root", str(inner), "mark", "--force"]), 3)
+            self.assertFalse((outer / ".git" / "yab").exists())
 
     def test_not_a_git_repo_exit_3(self):
         with tempfile.TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()), mock.patch(
@@ -335,6 +399,14 @@ class MarkTests(unittest.TestCase):
             ):
                 self.assertEqual(onboard.main(["--root", str(root), "mark", "--force"]), 1)
             self.assertFalse((root / ".git" / "yab" / "onboarded").exists())
+
+    def test_mark_force_with_closed_stdin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp)
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stdin", None), mock.patch(
+                "sys.stderr", new_callable=io.StringIO
+            ):
+                self.assertEqual(onboard.main(["--root", str(root), "mark", "--force"]), 1)
 
     def test_mark_outside_git_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()), mock.patch(
