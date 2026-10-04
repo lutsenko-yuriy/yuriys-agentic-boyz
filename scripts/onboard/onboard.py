@@ -296,7 +296,7 @@ def _check_config(root: Path, errors: List[str]) -> str:
     elif pm == "linear" and not str(project.get("project_id", "")).strip():
         errors.append("project.project_id is empty (required when providers.pm is linear; "
                       "move a legacy [linear].project_id there)")
-    elif pm == "linear" and str(project.get("project_id", "")).strip().lower().startswith("none"):
+    elif pm == "linear" and re.match(r"none\b", str(project.get("project_id", "")).strip(), re.I):
         errors.append("project.project_id must be a real id when providers.pm is linear, not 'none'")
     return prefix
 

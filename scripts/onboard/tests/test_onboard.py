@@ -238,6 +238,9 @@ class CheckTests(unittest.TestCase):
         for value in ("none", "None", " NONE ", "none (no project)", "None - tbd"):
             r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"', 'project_id = "%s"' % value)})
             self.assertIn("project.project_id must be a real id", self.msgs(r), value)
+        for real in ("nonesuch-a1b2", "Nonetheless"):
+            r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"', 'project_id = "%s"' % real)})
+            self.assertNotIn("project.project_id", self.msgs(r), real)
         gh = GOOD_TOML.replace('project_id = "p1"', 'project_id = "none"').replace('"linear"', '"github"')
         self.assertNotIn("project.project_id", self.msgs(self.check({"skill_router.toml": gh})))
 
