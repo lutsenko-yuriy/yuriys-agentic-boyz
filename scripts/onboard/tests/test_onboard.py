@@ -544,3 +544,16 @@ class MarkTests(unittest.TestCase):
             common = Path(git(wtp, "rev-parse", "--path-format=absolute", "--git-common-dir").strip())
             self.assertTrue((common / "yab" / "onboarded").is_file())
             self.assertEqual(onboard.marker_path(wtp), root.resolve() / ".git" / "yab" / "onboarded")
+
+
+class RepoRootTests(unittest.TestCase):
+    def test_repo_root_from_subdir_and_not_a_repo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve() / "r"
+            (root / "a" / "b").mkdir(parents=True)
+            subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
+            self.assertEqual(onboard.repo_root(root / "a" / "b"), root)
+            plain = Path(tmp).resolve() / "plain"
+            plain.mkdir()
+            with self.assertRaises(onboard.OnboardError):
+                onboard.repo_root(plain)
