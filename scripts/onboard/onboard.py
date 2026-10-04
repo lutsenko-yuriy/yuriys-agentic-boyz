@@ -163,6 +163,10 @@ def _section(text: str, heading: str) -> str:
     return m.group(1) if m else ""
 
 
+def _strip_comments(text: str) -> str:
+    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+
 def _languages(tech_stack: str) -> List[str]:
     lines = [ln.strip() for ln in _section(tech_stack, "Languages").splitlines() if ln.strip().startswith("|")]
     sep = next((i for i, ln in enumerate(lines) if re.fullmatch(r"\|[\s:|-]+\|?", ln)), None)
@@ -317,7 +321,7 @@ def check(root: Path) -> Dict[str, Any]:
         langs = _languages(texts["docs/TECH_STACK.md"])
         if not langs:
             errors.append("docs/TECH_STACK.md has no ## Languages table rows")
-        base = _section(texts.get("docs/CODE_STYLE.md", ""), "Base standard")
+        base = _strip_comments(_section(texts.get("docs/CODE_STYLE.md", ""), "Base standard"))
         for lang in langs if "docs/CODE_STYLE.md" in texts else []:
             if not _mentions(base, lang):
                 errors.append("CODE_STYLE Base standard does not cover TECH_STACK language %s" % lang)

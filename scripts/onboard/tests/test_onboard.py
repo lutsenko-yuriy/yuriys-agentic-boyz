@@ -589,10 +589,10 @@ class ShippedTemplateTests(unittest.TestCase):
 
     def test_filled_examples_pass_with_base_standard_cross_check(self):
         tech = filled("docs/TECH_STACK.md").replace(
-            "| <language> | <version> | <e.g. application code, scripts> |", "| Python | 3.12 | scripts |\n| Shell | POSIX | tooling |"
+            "| <language> | <version> | <e.g. application code, scripts> |", "| Rust | 1.80 | services |\n| Kotlin | 2.0 | apps |"
         )
         style = filled("docs/CODE_STYLE.md").replace(
-            "<language>: <style guide link>", "Python: PEP 8. Shell: Google Shell Style Guide."
+            "<language>: <style guide link>", "Rust: Rust Style Guide. Kotlin: Kotlin coding conventions."
         )
         r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
         self.assertTrue(r["ok"], r)
@@ -604,6 +604,21 @@ class ShippedTemplateTests(unittest.TestCase):
         style = filled("docs/CODE_STYLE.md").replace("<language>: <style guide link>", "Python: PEP 8.")
         r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
         self.assertIn("CODE_STYLE Base standard does not cover TECH_STACK language Go", r["errors"])
+
+    def test_mentions_inside_html_comments_do_not_count(self):
+        tech = filled("docs/TECH_STACK.md").replace(
+            "| <language> | <version> | <e.g. application code, scripts> |", "| Rust | 1.80 | services |"
+        )
+        style = filled("docs/CODE_STYLE.md").replace("<language>: <style guide link>", "Rust: <!-- Rust Style Guide -->")
+        r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
+        self.assertIn("CODE_STYLE Base standard does not cover TECH_STACK language Rust", r["errors"])
+
+    def test_template_comment_example_languages_do_not_count(self):
+        tech = filled("docs/TECH_STACK.md").replace(
+            "| <language> | <version> | <e.g. application code, scripts> |", "| Python | 3 | x |"
+        )
+        r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": filled("docs/CODE_STYLE.md"), "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
+        self.assertIn("language Python", " | ".join(r["errors"]))
 
 
 class PlaceholderCoverageTests(unittest.TestCase):
@@ -619,3 +634,4 @@ class PlaceholderCoverageTests(unittest.TestCase):
             text = onboard._read_regular(REPO_ROOT / rel) or ""
             stranded += ["%s %s" % (rel, m) for m in onboard.PLACEHOLDER_RE.findall(text) if m[2:-2] not in fillable]
         self.assertEqual(stranded, [])
+
