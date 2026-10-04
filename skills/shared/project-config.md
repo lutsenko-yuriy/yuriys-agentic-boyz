@@ -1,13 +1,8 @@
 # Project Config
 
 Read this file to resolve all project-specific constants referenced in skill instructions.
-When setting up the project, fill in every `{{placeholder}}`. Skills stay unchanged.
-
-## Source control
-
-| Setting | Value |
-|---|---|
-| Git host | `{{GIT_HOST}}` (e.g. GitHub, GitLab, Bitbucket) |
+Project identity (name, issue prefix, git host, PM tool, test/version settings) lives in `skill_router.toml`
+(`[project]`, `[providers]`). Skills stay unchanged.
 
 ## Tech stack
 

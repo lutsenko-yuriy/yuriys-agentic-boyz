@@ -3,8 +3,35 @@
 # Skills use role names (pm, vcs, files) in their frontmatter — edit here to switch tools.
 # Built-in providers: linear, github, files
 # Add your own under scripts/skill_router/providers/<name>/provider.py
-pm = "linear"
+# pm is mandatory and the only record of the PM tool: linear | github_issues | jira | shortcut | notion.
+# It is empty in the template; /onboard fills it in and `onboard.py apply` reconciles .mcp.json to match.
+pm = ""
 vcs = "github"
+
+[project]
+# Answers that used to be {{PLACEHOLDER}} values; `scripts/onboard/onboard.py apply` substitutes them into
+# tracked files. Empty values are left as placeholders so `onboard.py check` still reports them.
+name = ""
+description = ""
+architecture_summary = ""
+issue_prefix = ""
+git_host = ""
+pm_project_url = ""
+team_id = ""
+project_id = ""
+experiment_tool = ""
+available_models = ""
+ai_commit_trailer = ""
+ai_tool_credit = ""
+test_command = ""
+integration_test_dir = ""
+test_harness_file = ""
+test_harness_class = ""
+version_file = ""
+version_field = ""
+in_qa_paths = ""
+# false: apply deletes LICENSE (the project is not MIT-licensed like the template).
+keep_licence = true
 
 [linear]
 # project_id is the UUID from your Linear workspace URL
