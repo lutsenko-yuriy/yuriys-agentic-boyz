@@ -5,7 +5,7 @@ Reads one hook payload from stdin and keys on `hook_event_name`. Once the clone 
 written by `onboard.py mark`, located with onboard.marker_path) every event is a no-op: exit 0, no output. Before that:
 
     SessionStart         additionalContext: "Onboarding required - run /onboard"
-    UserPromptExpansion  slash commands: allow `onboard` and built-ins, block every other command (exit 2 + stderr)
+    UserPromptExpansion  slash commands: allow `onboard` and built-ins, block every other command (BLOCK_EXIT)
     PreToolUse           Skill: only `onboard`; Agent: deny; Edit/Write/MultiEdit/NotebookEdit: only BOOTSTRAP_PATHS
                          (realpath, contained in the repo root); Bash: bash_policy.is_allowed; mcp__*: read verbs
                          only; read-only built-ins pass; anything else is denied (fail closed)
@@ -14,8 +14,8 @@ written by `onboard.py mark`, located with onboard.marker_path) every event is a
 
 Claude Code fails OPEN on every hook exit code except 2, so failure handling is explicit and per event:
 PreToolUse fails closed (deny); SessionStart and UserPromptExpansion fail open, so /onboard can never be locked out.
-gate.sh enforces the same rule when this process itself dies. Both take the event name as argv[1], used only when the
-payload is unreadable.
+gate.sh enforces the same rule when this process itself dies, and maps BLOCK_EXIT to exit 2. Both take the event
+name as argv[1], used only when the payload is unreadable.
 
 Intended wiring (WU7, not wired yet; each row `"timeout": 5`):
     SessionStart (matcher startup)  scripts/onboard/gate.sh SessionStart
@@ -52,6 +52,10 @@ PASS_TOOLS = frozenset(
 )
 BUILTIN_SOURCE = "builtin"
 FAIL_OPEN_EVENTS = frozenset({"SessionStart", "UserPromptExpansion"})
+
+# gate.py's own "block" code. Not 2: CPython exits 2 itself (script not found, bad option), which gate.sh must not
+# mistake for a deliberate block. gate.sh maps exactly this code to Claude Code's blocking exit 2.
+BLOCK_EXIT = 10
 
 OK = (0, "", "")
 
@@ -126,7 +130,7 @@ def _prompt_expansion(data: Dict[str, Any]) -> Result:
     # Built-ins (/mcp, /clear, ...) do not currently fire this event; the source check is defensive.
     if data.get("command_name") == ONBOARD_SKILL or data.get("command_source") == BUILTIN_SOURCE:
         return OK
-    return 2, "", "%s (blocked /%s)\n" % (NEEDS_ONBOARDING, data.get("command_name"))
+    return BLOCK_EXIT, "", "%s (blocked /%s)\n" % (NEEDS_ONBOARDING, data.get("command_name"))
 
 
 def decide(data: Dict[str, Any], event: str, root: Path) -> Result:
@@ -146,7 +150,7 @@ def _fail(event: Optional[str], why: str) -> Result:
         return 0, "", ""
     if event == "PreToolUse":
         return _deny("gate error (%s)" % why)
-    return 2, "", "%s (gate error: %s)\n" % (NEEDS_ONBOARDING, why)
+    return BLOCK_EXIT, "", "%s (gate error: %s)\n" % (NEEDS_ONBOARDING, why)
 
 
 def run(stdin_text: str, fallback_event: Optional[str] = None) -> Result:

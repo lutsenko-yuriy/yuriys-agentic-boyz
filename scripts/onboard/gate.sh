@@ -3,7 +3,8 @@
 # Usage: gate.sh <EventName>   (the event is only used to pick the failure rule below)
 # Claude Code fails OPEN on any exit code but 2, so a crashing/missing interpreter must be converted here:
 #   PreToolUse (and unknown/no event): exit 2 = block.   SessionStart, UserPromptExpansion: exit 0 = fail open.
-# gate.py's own output is trusted only if it exited 0/2 and stdout is empty or a JSON object.
+# gate.py signals a deliberate block with exit 10 (CPython itself exits 2 when gate.py is missing, so 2 is not
+# trusted). Output is trusted only if it exited 0/10 and stdout is empty or a JSON object.
 event="${1:-}"
 dir="$(cd "$(dirname "$0")" && pwd)"
 py="${YAB_GATE_PYTHON:-python3}"
@@ -23,7 +24,7 @@ err="$(cat "$errf" 2>/dev/null)"
 rm -f "$errf"
 
 case "$rc" in
-  0|2) ;;
+  0|10) ;;
   *) fail "gate.py exited $rc" ;;
 esac
 if [ -n "$out" ]; then
@@ -33,7 +34,7 @@ if [ -n "$out" ]; then
   esac
   printf '%s\n' "$out"
 fi
-if [ "$rc" = 2 ]; then
+if [ "$rc" = 10 ]; then
   [ -n "$err" ] && printf '%s\n' "$err" >&2
   exit 2
 fi

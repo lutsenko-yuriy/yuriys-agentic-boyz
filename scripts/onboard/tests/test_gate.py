@@ -109,7 +109,7 @@ class SessionStartAndPrompt(Base):
     def test_other_custom_commands_blocked_with_exit_2(self):
         for name in ("plan", "implement", "onboard2", "Onboard", ""):
             code, out, err = self.expansion(name)
-            self.assertEqual((code, out), (2, ""), name)
+            self.assertEqual((code, out), (gate.BLOCK_EXIT, ""), name)
             self.assertIn(NEEDS, err)
 
     def test_builtin_source_allowed_and_non_slash_expansion_ignored(self):
@@ -276,7 +276,7 @@ class FailureSemantics(Base):
         self.assertEqual(decision(run("[]", "PreToolUse")), "deny")
         self.assertEqual(run("{nope", "SessionStart"), (0, "", ""))
         self.assertEqual(run("{nope", "UserPromptExpansion"), (0, "", ""))
-        self.assertEqual(run("{nope")[0], 2)  # no event at all: fail closed
+        self.assertEqual(run("{nope")[0], gate.BLOCK_EXIT)  # no event at all: fail closed
 
     def test_unknown_event_is_noop(self):
         self.assertEqual(run({"hook_event_name": "Stop", "cwd": str(self.root)}), (0, "", ""))
@@ -304,11 +304,12 @@ class WrapperTests(Base):
         env = dict(os.environ)
         env["YAB_GATE_PYTHON"] = python or sys.executable
         script = GATE_SH
-        if gate_py is not None:  # a copy of the wrapper next to a fake gate.py
+        if gate_py is not None:  # a copy of the wrapper next to a fake gate.py ("" = no gate.py at all)
             d = Path(self.tmp) / "fake"
             d.mkdir(exist_ok=True)
             shutil.copy(str(GATE_SH), str(d / "gate.sh"))
-            (d / "gate.py").write_text(gate_py)
+            if gate_py:
+                (d / "gate.py").write_text(gate_py)
             script = d / "gate.sh"
         args = [str(script)] + ([event] if event is not None else [])
         p = subprocess.run(args, input=payload if isinstance(payload, str) else json.dumps(payload),
@@ -337,6 +338,21 @@ class WrapperTests(Base):
         self.assertEqual(self.sh("UserPromptExpansion", {}, gate_py=crash), (0, "", ""))
         self.assertEqual(self.sh(None, {}, gate_py=crash)[0], 2)
         self.assertEqual(self.sh("Bogus", {}, gate_py=crash)[0], 2)
+
+    def test_missing_gate_py_does_not_lock_out_onboard(self):
+        # CPython itself exits 2 when it cannot open the script; that must not be mistaken for a gate block.
+        self.assertEqual(self.sh("UserPromptExpansion", {}, gate_py=""), (0, "", ""))
+        self.assertEqual(self.sh("SessionStart", {}, gate_py=""), (0, "", ""))
+        self.assertEqual(self.sh("PreToolUse", {}, gate_py="")[0], 2)
+
+    def test_exit_2_from_gate_py_is_not_a_block(self):
+        self.assertEqual(self.sh("UserPromptExpansion", {}, gate_py="import sys; sys.exit(2)\n"), (0, "", ""))
+        self.assertEqual(self.sh("PreToolUse", {}, gate_py="import sys; sys.exit(2)\n")[0], 2)
+
+    def test_gate_block_code_maps_to_exit_2(self):
+        code, _, err = self.sh("UserPromptExpansion", {}, gate_py="import sys; sys.stderr.write('why'); sys.exit(10)\n")
+        self.assertEqual(code, 2)
+        self.assertIn("why", err)
 
     def test_exit_codes_other_than_0_and_2_are_failures(self):
         self.assertEqual(self.sh("PreToolUse", {}, gate_py="import sys; sys.exit(1)\n")[0], 2)
