@@ -84,16 +84,128 @@ def probe(run_tools: bool = True) -> Dict[str, Any]:
     return data
 
 
+def _git(root: Path, *args: str) -> str:
+    return _run(["git", "-C", str(root), *args])
+
+
+def _tracked_files(root: Path) -> List[str]:
+    out = subprocess.run(
+        ["git", "-C", str(root), "-c", "core.quotePath=false", "ls-files", "-z"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    return [f for f in out.split("\0") if f]
+
+
+def _section(text: str, heading: str) -> str:
+    m = re.search(r"^##\s+%s\s*$(.*?)(?=^##\s|\Z)" % re.escape(heading), text, re.MULTILINE | re.DOTALL)
+    return m.group(1) if m else ""
+
+
+def _languages(tech_stack: str) -> List[str]:
+    rows = [ln for ln in _section(tech_stack, "Languages").splitlines() if ln.strip().startswith("|")]
+    names = [r.strip().strip("|").split("|")[0].strip().strip("`*") for r in rows[2:]]
+    return [n for n in names if n]
+
+
+def _check_config(root: Path, errors: List[str]) -> str:
+    path = root / "skill_router.toml"
+    if not path.is_file():
+        errors.append("skill_router.toml missing")
+        return ""
+    cfg = load_toml(path)
+    project = cfg.get("project", {})
+    for field in REQUIRED_PROJECT_FIELDS:
+        if not str(project.get(field, "")).strip():
+            errors.append("project.%s is empty" % field)
+    prefix = str(project.get("issue_prefix", "")).strip()
+    if prefix and not valid_prefix(prefix):
+        errors.append("project.issue_prefix %r is invalid (letters/digits, 2-10 chars, not N/A)" % prefix)
+    if not str(cfg.get("providers", {}).get("pm", "")).strip():
+        errors.append("providers.pm is empty")
+    return prefix
+
+
+def check(root: Path) -> Dict[str, Any]:
+    errors: List[str] = []
+    warnings: List[str] = []
+    placeholders: Dict[str, List[str]] = {}
+    for rel in _tracked_files(root):
+        if rel.startswith("scripts/onboard/"):
+            continue
+        try:
+            found = sorted(set(PLACEHOLDER_RE.findall((root / rel).read_text(encoding="utf-8"))))
+        except (UnicodeDecodeError, OSError):
+            continue
+        if found:
+            placeholders[rel] = found
+    if placeholders:
+        errors.append("%d file(s) still contain {{...}} placeholders" % len(placeholders))
+    texts = {}
+    for rel in ARTIFACTS:
+        p = root / rel
+        if not p.is_file():
+            errors.append("%s missing" % rel)
+        else:
+            texts[rel] = p.read_text(encoding="utf-8")
+            if TEMPLATE_MARKER in texts[rel]:
+                errors.append("%s is still a template" % rel)
+    prefix = _check_config(root, errors)
+    if "docs/TECH_STACK.md" in texts and "docs/CODE_STYLE.md" in texts:
+        base = _section(texts["docs/CODE_STYLE.md"], "Base standard").lower()
+        for lang in _languages(texts["docs/TECH_STACK.md"]):
+            if lang.lower() not in base:
+                errors.append("CODE_STYLE Base standard does not cover TECH_STACK language %s" % lang)
+    notes = root / NOTES_DIR
+    if prefix and valid_prefix(prefix) and notes.is_dir():
+        pat = re.compile(r"^%s-\d+" % re.escape(prefix))
+        for n in sorted(notes.glob("*.md")):
+            if n.name not in NOTES_SKIP and not pat.match(n.name):
+                warnings.append("note %s does not match prefix %s-N" % (n.name, prefix))
+    return {
+        "ok": not errors,
+        "template_mode": (root / ".yab-template").exists(),
+        "errors": errors,
+        "warnings": warnings,
+        "placeholders": placeholders,
+    }
+
+
+def marker_path(root: Path) -> Path:
+    common = Path(_git(root, "rev-parse", "--git-common-dir"))
+    if not common.is_absolute():
+        common = root / common
+    return common.resolve() / "yab" / "onboarded"
+
+
+def mark(root: Path, force: bool) -> int:
+    if not force and not check(root)["ok"]:
+        sys.stderr.write("onboard: check is not clean; refusing to mark (fix issues, or --force)\n")
+        return 1
+    marker = marker_path(root)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    marker.write_text("onboarded=%s\nsha=%s\n" % (stamp, _git(root, "rev-parse", "HEAD")))
+    print(marker)
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="onboard")
     ap.add_argument("--root", default=".")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("probe")
+    sub.add_parser("check")
+    sub.add_parser("mark").add_argument("--force", action="store_true")
     args = ap.parse_args(argv)
+    root = Path(args.root).resolve()
     if args.cmd == "probe":
         print(json.dumps(probe(), indent=2))
         return 0
-    return 1
+    if args.cmd == "check":
+        result = check(root)
+        print(json.dumps(result, indent=2))
+        return 0 if result["ok"] else 1
+    return mark(root, args.force)
 
 
 if __name__ == "__main__":
