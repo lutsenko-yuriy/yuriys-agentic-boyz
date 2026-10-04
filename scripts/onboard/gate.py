@@ -81,9 +81,19 @@ def is_onboarded(root: Path) -> bool:
 
 
 def _find_root(data: Dict[str, Any]) -> Path:
-    start = data.get("cwd") if isinstance(data.get("cwd"), str) and data.get("cwd") else None
-    start = start or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    return onboard.repo_root(Path(start), timeout=GIT_TIMEOUT)
+    """CLAUDE_PROJECT_DIR first: the payload cwd follows the Bash tool's `cd`, so a nested repo or non-git dir there
+    would point the gate at the wrong marker. The payload cwd is then only a fallback (and resolves relative paths)."""
+    cwd = data.get("cwd")
+    candidates = [os.environ.get("CLAUDE_PROJECT_DIR"), cwd if isinstance(cwd, str) else None, os.getcwd()]
+    error = None
+    for start in candidates:
+        if not start:
+            continue
+        try:
+            return onboard.repo_root(Path(start), timeout=GIT_TIMEOUT)
+        except (onboard.OnboardError, OSError) as exc:
+            error = error or exc
+    raise error or onboard.OnboardError("no repository found")
 
 
 def bootstrap_target_allowed(root: Path, raw: Any, cwd: Path) -> bool:

@@ -59,6 +59,7 @@ class Base(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.root = make_repo(self.tmp)
+        self.project_dir(self.root)
 
     def project_dir(self, path):
         """Set (or, with None, unset) CLAUDE_PROJECT_DIR for this test only; the original value is restored."""
@@ -97,6 +98,7 @@ class OnboardedIsNoOp(Base):
         wt = Path(self.tmp) / "wt"
         git(self.root, "worktree", "add", "-q", str(wt), "-b", "b")
         mark(self.root)
+        self.project_dir(None)
         self.assertEqual(run(pre(wt.resolve(), "Agent", {})), (0, "", ""))
 
 
@@ -257,6 +259,7 @@ class WritePaths(Base):
     def test_root_resolved_through_symlinked_checkout(self):
         link = Path(self.tmp) / "link"
         os.symlink(str(self.root), str(link))
+        self.project_dir(link)
         payload = pre(link, "Write", {"file_path": str(link / "AGENTS.md")})
         self.assertIsNone(decision(run(payload)))
 
@@ -266,6 +269,39 @@ class WritePaths(Base):
         self.assertIsNone(decision(run(payload)))
         payload = pre(sub, "Write", {"file_path": "PRODUCT_SPEC.md"})
         self.assertEqual(decision(run(payload)), "deny")
+
+
+class RootResolution(Base):
+    """The root comes from CLAUDE_PROJECT_DIR (stable); the payload cwd follows Bash `cd` and only resolves paths."""
+
+    def test_cwd_in_nested_repo_of_onboarded_root_stays_onboarded(self):
+        mark(self.root)
+        nested = make_repo(self.root, "sub")
+        self.assertEqual(run(pre(nested, "Write", {"file_path": str(self.root / "x.py")})), (0, "", ""))
+
+    def test_cwd_in_non_git_dir_does_not_lock_out(self):
+        mark(self.root)
+        plain = Path(self.tmp) / "plain"
+        plain.mkdir()
+        self.assertEqual(run(pre(plain, "Bash", {"command": "git commit -m x"})), (0, "", ""))
+
+    def test_unonboarded_root_not_bypassed_by_onboarded_nested_repo(self):
+        nested = make_repo(self.root, "sub")
+        mark(nested)
+        self.assertEqual(decision(run(pre(nested, "Agent", {}))), "deny")
+
+    def test_cwd_still_resolves_relative_write_paths(self):
+        self.assertIsNone(decision(run(pre(self.root / "docs", "Write", {"file_path": "TECH_STACK.md"}))))
+        nested = make_repo(self.root, "sub")
+        self.assertEqual(decision(run(pre(nested, "Write", {"file_path": "AGENTS.md"}))), "deny")
+
+    def test_fallbacks_when_project_dir_unset_or_invalid(self):
+        self.project_dir(None)
+        self.assertEqual(decision(run(pre(self.root, "Agent", {}))), "deny")  # payload cwd
+        with mock.patch("os.getcwd", return_value=str(self.root)):
+            payload = pre(self.root, "Agent", {})
+            del payload["cwd"]
+            self.assertEqual(decision(run(payload)), "deny")  # process cwd
 
 
 class AdopterSetup(Base):
@@ -293,10 +329,12 @@ class FailureSemantics(Base):
     def test_not_a_git_repo_follows_per_event_rule(self):
         plain = Path(self.tmp) / "plain"
         plain.mkdir()
-        self.assertEqual(decision(run(pre(plain, "Read", {}))), "deny")
-        self.assertEqual(run({"hook_event_name": "SessionStart", "cwd": str(plain)}), (0, "", ""))
-        self.assertEqual(run({"hook_event_name": "UserPromptExpansion", "cwd": str(plain),
-                              "expansion_type": "slash_command", "command_name": "plan"}), (0, "", ""))
+        self.project_dir(None)
+        with mock.patch("os.getcwd", return_value=str(plain)):
+            self.assertEqual(decision(run(pre(plain, "Read", {}))), "deny")
+            self.assertEqual(run({"hook_event_name": "SessionStart", "cwd": str(plain)}), (0, "", ""))
+            self.assertEqual(run({"hook_event_name": "UserPromptExpansion", "cwd": str(plain),
+                                  "expansion_type": "slash_command", "command_name": "plan"}), (0, "", ""))
 
     def test_internal_exception_fails_per_event(self):
         orig = gate.decide
@@ -331,6 +369,7 @@ class WrapperTests(Base):
 
     def sh(self, event, payload, python=None, gate_py=None, deadline=None):
         env = dict(os.environ)
+        env["CLAUDE_PROJECT_DIR"] = str(self.root)
         env["YAB_GATE_PYTHON"] = python or sys.executable
         if deadline:
             env["YAB_GATE_DEADLINE"] = deadline
