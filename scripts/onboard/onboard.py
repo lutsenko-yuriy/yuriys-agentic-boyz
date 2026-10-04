@@ -155,7 +155,7 @@ def _languages(tech_stack: str) -> List[str]:
 def _lang_name(part: str) -> str:
     """"Dart ^3.6.0" -> "Dart", "Python3.12" -> "Python", "Node v20 LTS" -> "Node"; a version-only cell -> ""."""
     words = re.sub(r"^[^A-Za-z.]+", "", part).split()
-    name = " ".join(w for w in words if not re.match(r"^(?:[\^~<>=v]*\d|LTS$|x$)", w, re.IGNORECASE))
+    name = " ".join(w for w in words if not re.match(r"^(?:[\^~<>=v]*\d|LTS$|[^\w.]+$)", w, re.IGNORECASE))
     name = re.sub(r"(?<=[A-Za-z+#])\d[\d.x]*\+?$", "", name)
     return name if re.match(r"\.[A-Z]|[A-Za-z]", name) else ""
 
@@ -176,7 +176,7 @@ def _scanned(rel: str) -> bool:
 def _remote_id(url: str) -> Optional[tuple]:
     """(host, path) for network URLs (scheme://… or scp-style user@host:path); local and file:// remotes give None."""
     m = re.match(
-        r"^(?:(?:https?|ssh|git|git\+ssh|ssh\+git)://(?:[^@/]+@)?([^/:?#]+)(?::\d+)?/|(?:[^@/:\s]+@)?([^/:\s]+):)"
+        r"^(?:(?:https?|ssh|git|git\+ssh|ssh\+git)://(?:[^@/]+@)?([^/:?#]+)(?::\d+)?/|(?:[^@/:\s]+@)?([^/:\s]*\.[^/:\s]+):)"
         r"/*([^?#]+)",
         url.strip(), re.IGNORECASE,
     )

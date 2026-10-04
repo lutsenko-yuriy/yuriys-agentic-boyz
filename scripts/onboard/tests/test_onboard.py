@@ -230,6 +230,10 @@ class CheckTests(unittest.TestCase):
             r = self.check({".yab-template": YAB_SENTINEL}, origin=origin)
             self.assertFalse(r["template_mode"], origin)
 
+    def test_local_remotes_have_no_network_id(self):
+        for local in ["file:///srv/git/yuriys-agentic-boyz", "C:/repo/yuriys-agentic-boyz", "../yuriys-agentic-boyz"]:
+            self.assertIsNone(onboard._remote_id(local), local)
+
     def test_template_origin_forms_accepted(self):
         for origin in [
             "git@github.com:lutsenko-yuriy/yuriys-agentic-boyz.git",
@@ -346,8 +350,9 @@ class CheckTests(unittest.TestCase):
 
     def test_version_notations_stripped_from_names(self):
         tech = ("## Languages\n\n| Language | Version |\n|---|---|\n| Dart ^3.6.0 | |\n| Python >=3.11 | |\n"
-                "| Kotlin 2.0+ | |\n| Python3.12 | |\n| Node v20 LTS | |\n| 3.x | |\n| v20 | |\n| LTS | |\n")
-        self.assertEqual(onboard._languages(tech), ["Dart", "Python", "Kotlin", "Python", "Node"])
+                "| Kotlin 2.0+ | |\n| Python3.12 | |\n| Node v20 LTS | |\n| 3.x | |\n| v20 | |\n| LTS | |\n"
+                "| Python >= 3.11 | |\n| Elixir ~> 1.16 | |\n| Ruby ≥ 3.3 | |\n")
+        self.assertEqual(onboard._languages(tech), ["Dart", "Python", "Kotlin", "Python", "Node", "Python", "Elixir", "Ruby"])
 
     def test_version_suffix_counts_as_mention(self):
         tech = GOOD_TECH.replace("| Dart | 3.6 |", "| C++ | 17 |\n| Python | 3 |")
