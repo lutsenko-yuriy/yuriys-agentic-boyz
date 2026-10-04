@@ -177,7 +177,8 @@ def _strip_comments(text: str) -> str:
 
 
 def _template_tokens(text: str) -> List[str]:
-    text = _strip_comments(text)
+    text = re.sub(r"^(```|~~~).*?^\1[^\n]*$|(`+)[^`].*?\2(?!`)", "", _strip_comments(text),
+                  flags=re.DOTALL | re.MULTILINE)
     return [t for t in TEMPLATE_TOKENS if t in text]
 
 

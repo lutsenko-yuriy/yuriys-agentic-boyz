@@ -640,6 +640,13 @@ class ShippedTemplateTests(unittest.TestCase):
             found.update(re.findall(r"<[^<>\n]+>", onboard._strip_comments(shipped(rel))))
         self.assertEqual(found, set(onboard.TEMPLATE_TOKENS))
 
+    def test_tokens_inside_code_are_not_flagged(self):
+        body = ("# Doc\n\nTag `v<version>` and ``Run `./tool <tool>` `` here.\n\n```\nx <language>\n```\n\n"
+                "~~~\ny <service>\n~~~\n")
+        self.assertTrue(self.check({"docs/CONSTRAINTS.md": body})["ok"])
+        r = self.check({rel: filled(rel) for rel in onboard.ARTIFACTS})
+        self.assertFalse(r["ok"])
+
     def test_ordinary_angle_brackets_are_not_tokens(self):
         body = ("# Doc\n\nUse Future<void> and Map<string, int>, mail <x@example.com>, <h2> and <https://e.com>.\n"
                 "A -> <validate> -> done.\n\n~~~\nList<String> x;\n~~~\n\n    Set<Foo> y;\n<!-- <tool> -->\n")
