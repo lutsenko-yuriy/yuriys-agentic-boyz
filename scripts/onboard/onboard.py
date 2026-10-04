@@ -167,6 +167,23 @@ def _strip_comments(text: str) -> str:
     return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
 
+HTML_TAGS = {"a", "b", "br", "code", "details", "div", "em", "hr", "i", "img", "kbd", "li", "ol", "p", "pre", "span",
+             "strong", "sub", "summary", "sup", "table", "td", "th", "tr", "ul"}
+TOKEN_RE = re.compile(r"<([a-z][^<>\n]*)>")
+
+
+def _template_tokens(text: str) -> List[str]:
+    """Unfilled `<token>` placeholders outside comments and code; real HTML tags and autolinks do not count."""
+    text = re.sub(r"```.*?```|`[^`\n]*`", "", _strip_comments(text), flags=re.DOTALL)
+    found = []
+    for m in TOKEN_RE.finditer(text):
+        body = m.group(1)
+        if re.match(r"[a-z][a-z0-9+.-]*:", body) or re.split(r"[\s/]", body, 1)[0] in HTML_TAGS:
+            continue
+        found.append(m.group(0))
+    return found
+
+
 def _languages(tech_stack: str) -> List[str]:
     lines = [ln.strip() for ln in _section(tech_stack, "Languages").splitlines() if ln.strip().startswith("|")]
     sep = next((i for i, ln in enumerate(lines) if re.fullmatch(r"\|[\s:|-]+\|?", ln)), None)
@@ -311,6 +328,9 @@ def check(root: Path) -> Dict[str, Any]:
             continue
         if TEMPLATE_MARKER not in text:
             texts[rel] = text
+            tokens = _template_tokens(text)
+            if tokens:
+                errors.append("%s still contains <...> template tokens (e.g. %s)" % (rel, tokens[0]))
         elif not template_mode:
             errors.append("%s is still a template" % rel)
     config_errors: List[str] = []

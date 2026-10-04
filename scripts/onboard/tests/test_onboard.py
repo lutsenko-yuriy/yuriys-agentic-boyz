@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -583,6 +584,10 @@ def filled(rel):
     return shipped(rel).replace(MARKER + "\n", "")
 
 
+def done(text):
+    return re.sub(r"<[a-z][^<>\n]*>", "x", text)
+
+
 @needs_toml
 class ShippedTemplateTests(unittest.TestCase):
     def check(self, files):
@@ -606,7 +611,7 @@ class ShippedTemplateTests(unittest.TestCase):
         style = filled("docs/CODE_STYLE.md").replace(
             "<language>: <style guide link>", "Rust: Rust Style Guide. Kotlin: Kotlin coding conventions."
         )
-        r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
+        r = self.check({"docs/TECH_STACK.md": done(tech), "docs/CODE_STYLE.md": done(style), "docs/CONSTRAINTS.md": done(filled("docs/CONSTRAINTS.md"))})
         self.assertTrue(r["ok"], r)
 
     def test_filled_examples_fail_when_base_standard_misses_a_language(self):
@@ -616,6 +621,17 @@ class ShippedTemplateTests(unittest.TestCase):
         style = filled("docs/CODE_STYLE.md").replace("<language>: <style guide link>", "Python: PEP 8.")
         r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
         self.assertIn("CODE_STYLE Base standard does not cover TECH_STACK language Go", r["errors"])
+
+    def test_marker_removed_but_tokens_left_fails_check(self):
+        files = {rel: filled(rel) for rel in onboard.ARTIFACTS}
+        r = self.check(files)
+        for rel in onboard.ARTIFACTS:
+            self.assertTrue(any(rel in e and "<...>" in e for e in r["errors"]), (rel, r["errors"]))
+
+    def test_real_html_autolinks_and_code_are_not_tokens(self):
+        body = "# Doc\n\nSee <https://example.com/x> and <br> and <a href=\"u\">x</a> and `Vec<T>`.\n\n```\nList<String> x;\n```\n<!-- <tool> -->\n"
+        r = self.check({"docs/CONSTRAINTS.md": body})
+        self.assertTrue(r["ok"], r)
 
     def test_mentions_inside_html_comments_do_not_count(self):
         tech = filled("docs/TECH_STACK.md").replace(
