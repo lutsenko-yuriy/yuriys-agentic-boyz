@@ -37,6 +37,7 @@ PLACEHOLDER_RE = re.compile(r"(?<![{$])\{\{(?:%s)\}\}(?!\})" % "|".join(KNOWN_PL
 SCAN_SKIP_DIRS = ("scripts/onboard/", "docs/knowledge/")
 SCAN_SKIP_FILES = {"docs/CHANGELOG.md"}
 SCAN_KEEP_NAMES = {"README.md", "TEMPLATE.md"}
+YAB_HOST = "github.com"
 YAB_REPO = "lutsenko-yuriy/yuriys-agentic-boyz"
 MAX_SCAN_BYTES = 1_000_000
 TEMPLATE_MARKER = "<!-- yab:template -->"
@@ -141,20 +142,23 @@ def _section(text: str, heading: str) -> str:
 
 
 def _languages(tech_stack: str) -> List[str]:
-    rows = [ln for ln in _section(tech_stack, "Languages").splitlines() if ln.strip().startswith("|")]
-    cells = [re.sub(r"[*`]", "", r.strip().strip("|").split("|")[0]) for r in rows[2:]]
+    lines = [ln.strip() for ln in _section(tech_stack, "Languages").splitlines() if ln.strip().startswith("|")]
+    sep = next((i for i, ln in enumerate(lines) if re.fullmatch(r"\|[\s:|-]+\|?", ln)), None)
+    rows = lines[sep + 1:] if sep is not None else []
     names = []
-    for cell in cells:
-        for part in re.split(r"[/,]", re.sub(r"\(.*?\)", "", cell)):
-            m = re.match(r"\s*([A-Za-z][\w+#.-]*)", part)
-            if m:
-                names.append(m.group(1).rstrip(".-"))
+    for row in rows:
+        cell = re.sub(r"[*`]|\(.*?\)", "", row.strip("|").split("|")[0])
+        for part in re.split(r"[/,]", cell):
+            # Drop leading emoji/punctuation (keeping ".NET") and a trailing version like "3.12" or "v17".
+            name = re.sub(r"\s+v?\d[\w.]*$", "", re.sub(r"^[^A-Za-z.]+", "", part).strip())
+            if name:
+                names.append(name)
     return names
 
 
 def _mentions(text: str, word: str) -> bool:
-    # +, # and - count as part of a name so "C" is not covered by "C++" or "Objective-C".
-    return re.search(r"(?<![\w+#-])%s(?![\w+#-])" % re.escape(word), text, re.IGNORECASE) is not None
+    # +, # and - are part of a name ("C" is not "C++"); a trailing digit is a version ("C++17", "Python3").
+    return re.search(r"(?<![\w+#-])%s(?![A-Za-z_+#-])" % re.escape(word), text, re.IGNORECASE) is not None
 
 
 def _scanned(rel: str) -> bool:
@@ -165,15 +169,28 @@ def _scanned(rel: str) -> bool:
     )
 
 
+def _remote_id(url: str) -> Optional[tuple]:
+    m = re.match(r"^(?:[a-z+]+://)?(?:[^@/]+@)?([^/:]+)(?::\d+)?[:/](.+?)(?:\.git)?/?$", url.strip())
+    return (m.group(1).lower(), m.group(2).lower()) if m else None
+
+
 def _template_mode(root: Path, errors: List[str]) -> bool:
-    """The sentinel only counts in YAB itself; a copy that inherited it must not skip setup."""
+    """The sentinel only counts in YAB itself (or a fork with YAB as a remote); an inherited copy must not skip setup.
+
+    A plain `git clone` of YAB that is being turned into a new project still looks like YAB until its origin changes.
+    """
     sentinel = root / ".yab-template"
     if not sentinel.exists():
         return False
-    origin = _git(root, "remote", "get-url", "origin", allow_fail=True)
-    if YAB_REPO in sentinel.read_text(encoding="utf-8", errors="replace") and YAB_REPO in origin:
+    fields = dict(ln.split("=", 1) for ln in sentinel.read_text(encoding="utf-8", errors="replace").splitlines() if "=" in ln)
+    urls = _git(root, "config", "--get-regexp", r"^remote\..*\.url$", allow_fail=True).splitlines()
+    remotes = {_remote_id(ln.split(None, 1)[1]) for ln in urls if " " in ln}
+    if fields.get("repo", "").strip().lower() == YAB_REPO and (YAB_HOST, YAB_REPO) in remotes:
         return True
-    errors.append(".yab-template present outside the YAB repo (origin %r); delete it" % (origin or "none"))
+    errors.append(
+        ".yab-template present but no remote is %s/%s: delete it if this project was created from YAB, "
+        "or add YAB as a remote if this is a fork" % (YAB_HOST, YAB_REPO)
+    )
     return False
 
 
@@ -291,19 +308,29 @@ def _resolve_root(arg: Optional[str]) -> Path:
     start = Path(arg).resolve() if arg else Path(os.getcwd())
     top = Path(_git(start, "rev-parse", "--show-toplevel")).resolve()
     # git walks up to an enclosing repo; an explicit --root must be the toplevel itself.
-    if arg and top != start:
+    if arg and not os.path.samefile(str(top), str(start)):
         raise OnboardError("--root %s is not a repo toplevel (enclosing toplevel: %s)" % (start, top))
     return top
 
 
+class _Parser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        self.print_usage(sys.stderr)
+        sys.stderr.write("onboard: %s\n" % message)
+        raise SystemExit(3)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(prog="onboard")
+    ap = _Parser(prog="onboard")
     ap.add_argument("--root", help="repo root (default: git toplevel of the current directory)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("probe")
     sub.add_parser("check")
     sub.add_parser("mark").add_argument("--force", action="store_true")
-    args = ap.parse_args(argv)
+    try:
+        args = ap.parse_args(argv)
+    except SystemExit as e:
+        return e.code if isinstance(e.code, int) else 3
     if args.cmd == "probe":
         print(json.dumps(probe(), indent=2))
         return 0

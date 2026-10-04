@@ -216,6 +216,34 @@ class CheckTests(unittest.TestCase):
         r = self.check({".yab-template": YAB_SENTINEL}, origin=YAB_ORIGIN)
         self.assertTrue(r["template_mode"])
 
+    def test_template_origin_must_match_exactly(self):
+        for origin in [
+            "https://github.com/lutsenko-yuriy/yuriys-agentic-boyz-playground.git",
+            "https://gitlab.com/mirror/lutsenko-yuriy/yuriys-agentic-boyz.git",
+            "git@github.com:someone/yuriys-agentic-boyz.git",
+        ]:
+            r = self.check({".yab-template": YAB_SENTINEL}, origin=origin)
+            self.assertFalse(r["template_mode"], origin)
+
+    def test_template_origin_forms_accepted(self):
+        for origin in [
+            "git@github.com:lutsenko-yuriy/yuriys-agentic-boyz.git",
+            "https://github.com/Lutsenko-Yuriy/Yuriys-Agentic-Boyz",
+            "ssh://git@github.com/lutsenko-yuriy/yuriys-agentic-boyz.git",
+        ]:
+            self.assertTrue(self.check({".yab-template": YAB_SENTINEL}, origin=origin)["template_mode"], origin)
+
+    def test_fork_with_upstream_remote_is_template_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {".yab-template": YAB_SENTINEL}, "git@github.com:someone/yuriys-agentic-boyz.git")
+            git(root, "remote", "add", "upstream", YAB_ORIGIN)
+            self.assertTrue(run_check(root)["template_mode"])
+
+    def test_sentinel_content_must_name_yab_exactly(self):
+        for content in ["", "repo=lutsenko-yuriy/yuriys-agentic-boyz-x\n"]:
+            r = self.check({".yab-template": content}, origin=YAB_ORIGIN)
+            self.assertFalse(r["template_mode"], content)
+
     def test_inherited_sentinel_is_not_template_mode(self):
         r = self.check({".yab-template": YAB_SENTINEL, "AGENTS.md": "{{PROJECT_NAME}}"},
                        origin="git@github.com:someone/new-app.git")
@@ -234,6 +262,7 @@ class CheckTests(unittest.TestCase):
 
     def test_template_mode_still_requires_artifacts(self):
         r = self.check({".yab-template": YAB_SENTINEL, "docs/CONSTRAINTS.md": None}, origin=YAB_ORIGIN)
+        self.assertTrue(r["template_mode"])
         self.assertFalse(r["ok"])
 
     def test_only_known_placeholders_count(self):
@@ -276,6 +305,17 @@ class CheckTests(unittest.TestCase):
     def test_language_alternatives_each_required(self):
         tech = GOOD_TECH.replace("| Dart | 3.6 |", "| TypeScript / JavaScript | 5 |")
         style = "## Base standard\n\nTypeScript and JavaScript: ESLint.\n"
+        self.assertTrue(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style})["ok"])
+        r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": "## Base standard\n\nTypeScript: ESLint.\n"})
+        self.assertIn("language JavaScript", self.msgs(r))
+
+    def test_language_names_parsed_fully(self):
+        tech = "## Languages\n\nIntro line\n\n| Language | Version |\n|---|---|\n| 🐍 Python | 3 |\n| .NET | 8 |\n| Visual Basic | 6 |\n"
+        self.assertEqual(onboard._languages(tech), ["Python", ".NET", "Visual Basic"])
+
+    def test_version_suffix_counts_as_mention(self):
+        tech = GOOD_TECH.replace("| Dart | 3.6 |", "| C++ | 17 |\n| Python | 3 |")
+        style = "## Base standard\n\nC++17 Core Guidelines. Python3: PEP 8.\n"
         self.assertTrue(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style})["ok"])
 
     def test_language_cell_markup_and_qualifiers(self):
@@ -335,6 +375,21 @@ class CheckTests(unittest.TestCase):
             git(root, "add", "-A")
             with redirect_stdout(io.StringIO()):
                 self.assertEqual(onboard.main(["--root", str(root), "check"]), 0)
+
+    def test_root_spelled_differently_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp)
+            spelled = str(root) + "/docs/.."
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(onboard.main(["--root", spelled, "check"]), 0)
+            if os.path.exists(str(root).swapcase()):
+                with redirect_stdout(io.StringIO()):
+                    self.assertEqual(onboard.main(["--root", str(root).swapcase(), "check"]), 0)
+
+    def test_usage_error_exit_3(self):
+        with mock.patch("sys.stderr", new_callable=io.StringIO):
+            self.assertEqual(onboard.main(["chek"]), 3)
+            self.assertEqual(onboard.main([]), 3)
 
     def test_root_inside_enclosing_repo_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
