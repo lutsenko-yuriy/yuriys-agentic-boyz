@@ -5,3 +5,4 @@
 - **Architectural drift** — patterns inconsistent with the rest of the codebase without justification.
 - **Dependency graph safety** — no circular dependencies in the DI graph / provider graph.
 - **Comment hygiene** — flag any comments that narrate WHAT the code does, duplicate identifiers, or could be removed without confusing a future reader. Only WHY comments are acceptable: hidden constraints, invariants, platform quirks, non-obvious contracts. Flag excess as 🟡.
+- **Tech-stack drift** — a new language, framework or tool in the diff must be declared in `docs/TECH_STACK.md`, and a new language needs a Base standard in `docs/CODE_STYLE.md`.
