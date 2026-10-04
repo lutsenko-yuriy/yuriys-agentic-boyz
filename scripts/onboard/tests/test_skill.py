@@ -158,7 +158,7 @@ class ConfigAgreementTest(unittest.TestCase):
             present |= {f[2:-2] for f in found}
         text = text_of(skill_files())
         for name in sorted(manual & present):
-            self.assertIn(name, text)
+            self.assertIn("`%s`" % name, text)  # the bare backticked name, not e.g. CODE_STYLE.md
 
     def test_calibrate_reused_by_reference(self):
         text = SKILL.read_text(encoding="utf-8")
