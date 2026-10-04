@@ -254,8 +254,13 @@ def _check_config(root: Path, errors: List[str]) -> str:
     prefix = str(project.get("issue_prefix", "")).strip()
     if prefix and not valid_prefix(prefix):
         errors.append("project.issue_prefix %r is invalid (letters/digits, 2-10 chars, not N/A)" % prefix)
-    if not str(providers.get("pm", "")).strip():
+    pm = str(providers.get("pm", "")).strip()
+    if not pm:
         errors.append("providers.pm is empty")
+    elif pm not in PM_TOOLS:
+        errors.append("providers.pm %r must be one of %s" % (pm, ", ".join(sorted(PM_TOOLS))))
+    elif pm == "linear" and not str(project.get("project_id", "")).strip():
+        errors.append("project.project_id is empty (required when providers.pm is linear)")
     return prefix
 
 

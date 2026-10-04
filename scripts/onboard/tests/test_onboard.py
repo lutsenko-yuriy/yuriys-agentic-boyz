@@ -108,6 +108,7 @@ vcs = "github"
 name = "Habit Loop"
 description = "d"
 issue_prefix = "HL"
+project_id = "p1"
 """
 GOOD_ARTIFACT = "# Doc\n"
 GOOD_TECH = "## Languages\n\n| Language | Version |\n|---|---|\n| Dart | 3.6 |\n\n## Platforms\n"
@@ -194,6 +195,18 @@ class CheckTests(unittest.TestCase):
     def test_missing_pm(self):
         r = self.check({"skill_router.toml": GOOD_TOML.replace('pm = "linear"\n', "")})
         self.assertIn("providers.pm", self.msgs(r))
+
+    def test_pm_must_be_a_router_provider(self):
+        for pm in ["jira", "github_issues", "files"]:
+            with self.subTest(pm):
+                r = self.check({"skill_router.toml": GOOD_TOML.replace('pm = "linear"', 'pm = "%s"' % pm)})
+                self.assertIn("providers.pm %r must be one of" % pm, self.msgs(r))
+
+    def test_linear_requires_project_id(self):
+        r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"\n', "")})
+        self.assertIn("project.project_id is empty", self.msgs(r))
+        r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"\n', "").replace('"linear"', '"github"')})
+        self.assertNotIn("project.project_id", self.msgs(r))
 
     def test_invalid_prefix(self):
         for bad in ["N/A", "NA", "A B", ""]:
