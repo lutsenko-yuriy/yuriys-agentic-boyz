@@ -15,8 +15,9 @@ RESOURCES = SKILL_DIR / "resources"
 STUB = ROOT / ".claude" / "commands" / "onboard.md"
 CALIBRATE = ROOT / "skills" / "configure" / "calibrate" / "SKILL.md"
 
-VERBS = "edit|write|create|modify|fill|replace|delete|add|update|change|append|set"
-WRITE_RE = re.compile(r"\b(?:%s)\s+`([^`\s]+)`" % VERBS, re.IGNORECASE)
+VERBS = "edit|write|create|modify|fill|replace|delete|add|update|change|append|set|remove|rewrite|overwrite|rename|move|save"
+VERB = r"\b(?:%s)(?:s|es)?\b:?" % VERBS  # whole word, optional inflection or colon
+WRITE_RE = re.compile(VERB + r"\s+`([^`]+)`", re.IGNORECASE)
 HUMAN_MARK = "separate terminal"
 BASH_FENCE_RE = re.compile(r"^```bash\n(.*?)^```", re.MULTILINE | re.DOTALL)
 INLINE_CMD_RE = re.compile(r"`((?:python3[\w.]*|/\S*python3[\w.]*|git|gh|ls|cat|grep|rg|find|head|tail|wc) [^`]*)`")
@@ -101,7 +102,7 @@ class WritePathsTest(unittest.TestCase):
     def test_every_write_instruction_is_declared_and_allowed(self):
         text = text_of(skill_files())
         declared = set(declared_writes(SKILL.read_text(encoding="utf-8")))
-        found = {t for t in WRITE_RE.findall(text) if re.search(r"[/.]", t) and not t.startswith("-")}
+        found = set(WRITE_RE.findall(text))
         self.assertTrue(found)
         self.assertEqual(set(), found - declared, "write instruction for an undeclared path")
         self.assertEqual(set(), declared - found, "declared path with no write instruction")
@@ -232,19 +233,19 @@ class StepReferenceTest(unittest.TestCase):
 
 
 class NoStrayWriteVerbsTest(unittest.TestCase):
-    VERB_RE = re.compile(r"\b(%s)\s+(?!`)" % VERBS, re.IGNORECASE)
+    VERB_RE = re.compile(VERB + r"\s+(?!`)", re.IGNORECASE)
 
     def test_write_verbs_are_followed_by_a_listed_path(self):
         declared = set(declared_writes(SKILL.read_text(encoding="utf-8")))
         offenders = []
         for p in skill_files():
             for ln in p.read_text(encoding="utf-8").splitlines():
-                if ln.lstrip().startswith("description:"):
-                    continue
+                if ln.lstrip().startswith(("description:", "<!-- onboard:", "<!-- /onboard:")):
+                    continue  # frontmatter and the structured declaration markers
                 if self.VERB_RE.search(ln):
                     offenders.append("%s: %s" % (p.name, ln.strip()[:100]))
                 for tok in WRITE_RE.findall(ln):
-                    if re.search(r"[/.]", tok) and not tok.startswith("-") and tok not in declared:
+                    if tok not in declared:
                         offenders.append("%s: unlisted target %s" % (p.name, tok))
         self.assertEqual([], offenders)
 
@@ -365,15 +366,22 @@ class TemplateFlowTest(unittest.TestCase):
     def test_human_only_commands_run_in_a_separate_terminal_not_via_bang(self):
         text = text_of(skill_files())
         human = human_commands(text)
-        self.assertTrue(any(c.startswith("git remote set-url origin") for c in human))
+        self.assertEqual(2, len(human))
+        self.assertTrue(any("&& git remote set-url origin" in c for c in human))
         self.assertTrue(any(c.endswith("onboard.py mark --force") for c in human))
         for c in human:
-            self.assertTrue(c.startswith("git remote set-url origin") or c.endswith("onboard.py mark --force"), c)
+            # A new terminal opens in ~: the line must cd to the repo root and use the interpreter probe found.
+            self.assertTrue(c.startswith("cd <absolute repo root> && "), c)
+            self.assertNotIn("python3.12", c)
             self.assertFalse(c.startswith("!"), c)
+        self.assertTrue(any("<interpreter> scripts/onboard/onboard.py mark --force" in c for c in human))
+        self.assertIn("git rev-parse --show-toplevel", text)
         self.assertNotRegex(text, r"`! ")
         self.assertNotRegex(text, r"runs as the user")
         for ln in (ln for ln in text.splitlines() if HUMAN_MARK in ln):
             self.assertRegex(ln, r'say "done"')
+            self.assertRegex(ln, r"re-run check")
+        self.assertIn(".git/yab/onboarded", text)
         # Outside those instructions the agent must never be told to run set-url or --force.
         stripped = agent_text(text)
         self.assertNotIn("set-url", stripped)

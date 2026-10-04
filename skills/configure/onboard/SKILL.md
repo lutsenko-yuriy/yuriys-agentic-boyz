@@ -6,7 +6,7 @@ output_style: CONCISE
 description: First-session onboarding. Probes the machine, collects project config into skill_router.toml, fills docs/TECH_STACK.md, docs/CODE_STYLE.md and docs/CONSTRAINTS.md by inferring the stack from the repo and confirming with the user, sets the model tier mapping, then runs the onboarding check and marks the clone onboarded. In an already-configured project it gives a one-screen orientation instead. Runs inline (no subagents) because the onboarding gate denies them.
 ---
 
-This skill runs **inline in the main session**. While the clone is not onboarded the gate denies subagents, other skills, shell commands outside the allowlist and edits outside the list below, so follow this file exactly and do not try to route around the gate.
+This skill runs **inline in the main session**. While the clone is not onboarded the gate denies subagents, other skills, shell commands outside the allowlist and alterations outside the list below, so follow this file exactly and do not try to route around the gate.
 
 <!-- onboard:tools Read, Glob, Grep, Edit, Write, Bash, AskUserQuestion, ToolSearch, TodoWrite -->
 
@@ -56,15 +56,19 @@ Run `check` (exit 1 is normal here; read its JSON). State table:
 |---|---|---|---|---|
 | absent | any | | no sentinel error | Configured (no errors, no placeholders): orientation (step 9), `mark`, stop. Otherwise step 3. |
 | present | YAB | maintaining YAB | `template_mode` true, `ok` true | Orientation (step 9), then `mark` (it works in template mode); stop. |
-| present | YAB | new project from the template | `template_mode` true | Human step A below. Re-run `check`: `template_mode` is now false with the sentinel error below. Continue at step 3; `apply` removes the sentinel. |
-| present | not YAB, or none | | `template_mode` false, error ".yab-template present but origin is not ..." | Treat as an adopter: continue at step 3; `apply` removes the sentinel. If the user says this is a YAB fork for maintenance, Human step B, then stop. |
+| present | YAB | new project from the template | `template_mode` true | Human step A below. Re-run `check`: `template_mode` is now false with the sentinel error below. Continue at step 3; `apply` clears the sentinel. |
+| present | not YAB, or none | | `template_mode` false, error ".yab-template present but origin is not ..." | Treat as an adopter: continue at step 3; `apply` clears the sentinel. If the user says this is a YAB fork for maintenance, Human step B, then stop. |
 
 When `template_mode` is true, ask: "(a) maintaining YAB itself, or (b) a fresh project created from the template?"
 
-Human step A (new project): ask the user to open a separate terminal window, run `git remote set-url origin <their repo URL>` there, and say "done". The gate blocks it for you.
-Human step B (YAB fork for maintenance): ask the user to open a separate terminal window, run `python3.12 scripts/onboard/onboard.py mark --force` there (it needs an interactive terminal), and say "done".
+For both human steps, first get the absolute repo root with `git rev-parse --show-toplevel` and the interpreter from probe's `pythons_with_tomllib`, and print the command as one ready-to-paste line with both filled in (a new terminal window opens in the home directory, not the repo).
 
-Never run `git remote` yourself, remove the template sentinel yourself, or force the marker; do not use a `!` prefix for these (it may not be a terminal and may still pass through the gate).
+Human step A (new project): ask the user to open a separate terminal window and paste `cd <absolute repo root> && git remote set-url origin <their repo URL>`, then say "done"; re-run check afterwards. The gate blocks it for you.
+Human step B (YAB fork for maintenance): ask the user to open a separate terminal window and paste `cd <absolute repo root> && <interpreter> scripts/onboard/onboard.py mark --force` (it needs an interactive terminal), then say "done"; re-run check afterwards.
+
+After step B, confirm the marker took effect with `ls .git/yab/onboarded` (in a linked worktree `.git` is a file: then ask the user to confirm instead).
+
+Never run `git remote` yourself, touch the template sentinel yourself, or force the marker; do not use a `!` prefix for these (it may not be a terminal and may still pass through the gate).
 
 ### 3. Collect project config
 
@@ -93,13 +97,13 @@ ai_commit_trailer ai_tool_credit test_command integration_test_dir test_harness_
 version_file version_field in_qa_paths
 -->
 
-Proposed defaults: `ai_commit_trailer` is the current agent's trailer line (for Claude, its `Co-Authored-By:` line from the session); `ai_tool_credit` is the matching credit line (for Claude Code, the "Generated with Claude Code" line with its link); `git_host` is the host of `origin`; `pm_project_url` is the Linear project URL, or the repo's `/issues` URL for GitHub Issues. For `integration_test_dir`, `test_harness_file`, `test_harness_class`, `version_file`, `version_field` and `in_qa_paths`, use what the repo really has; when it has none, use a phrase that reads correctly in the table, e.g. `none (no integration test harness)` or `none (no version file)`. `project_id` is a real id when `pm` is `"linear"`, else `none`; `available_models` is a comma-separated list and is what step 7 maps; `keep_licence` is `true` or `false` and `false` makes `apply` delete `LICENSE`.
+Proposed defaults: `ai_commit_trailer` is the current agent's trailer line (for Claude, its `Co-Authored-By:` line from the session); `ai_tool_credit` is the matching credit line (for Claude Code, the "Generated with Claude Code" line with its link); `git_host` is the host of `origin`; `pm_project_url` is the Linear project URL, or the repo's `/issues` URL for GitHub Issues. For `integration_test_dir`, `test_harness_file`, `test_harness_class`, `version_file`, `version_field` and `in_qa_paths`, use what the repo really has; when it has none, use a phrase that reads correctly in the table, e.g. `none (no integration test harness)` or `none (no version file)`. `project_id` is a real id when `pm` is `"linear"`, else `none`; `available_models` is a comma-separated list and is what step 7 maps; `keep_licence` is `true` or `false` and `false` makes `apply` drop `LICENSE`.
 
 ### 4. Apply
 
-Run `apply`. It substitutes the `[project]` values everywhere, reconciles `.mcp.json` with `pm` and removes the template sentinel. Report its `changed`, `unresolved` and `warnings`. Re-running is safe.
+Run `apply`. It substitutes the `[project]` values everywhere, reconciles `.mcp.json` with `pm` and clears the template sentinel. Report its `changed`, `unresolved` and `warnings`. Re-running is safe.
 
-`apply` fills every placeholder that has a `[project]` key. The one placeholder it never fills is `CODE_STYLE` in `AGENTS.md`, which step 6 replaces. If `unresolved` lists anything else, correct the value in `skill_router.toml` and re-run `apply`; values for `skills/shared/project-config.md` (test, version, QA fields) come from there too, so that file needs no hand edit.
+`apply` supplies every placeholder that has a `[project]` key. The one placeholder it never supplies is `CODE_STYLE` in `AGENTS.md`, which step 6 handles. If `unresolved` lists anything else, correct the value in `skill_router.toml` and re-run `apply`; values for `skills/shared/project-config.md` (test, version, QA fields) come from there too, so that file needs no hand edit.
 
 ### 5. The three artifacts
 
@@ -109,7 +113,7 @@ Follow `@skills/configure/onboard/resources/artifact-guide.md` for inference and
 - Write `docs/CODE_STYLE.md`
 - Write `docs/CONSTRAINTS.md` (ask the four constraint questions; do not invent answers)
 
-In all three, remove the `<!-- yab:template -->` marker line, every `<...>` token and the template's guidance comments. Every language in the TECH_STACK Languages table needs a Base standard entry in CODE_STYLE, with the language spelled identically (exact, case-sensitive). If no enforcer is configured for a language, say so instead of inventing one.
+In all three, strip the `<!-- yab:template -->` marker line, every `<...>` token and the template's guidance comments. Every language in the TECH_STACK Languages table needs a Base standard entry in CODE_STYLE, with the language spelled identically (exact, case-sensitive). If no enforcer is configured for a language, say so instead of inventing one.
 
 ### 6. Architecture and agent docs
 
