@@ -15,7 +15,9 @@ RESOURCES = SKILL_DIR / "resources"
 STUB = ROOT / ".claude" / "commands" / "onboard.md"
 CALIBRATE = ROOT / "skills" / "configure" / "calibrate" / "SKILL.md"
 
-WRITE_RE = re.compile(r"\b(?:Edit|Write|Create)\s+`([^`\s]+)`")
+VERBS = "edit|write|create|modify|fill|replace|delete|add|update|change|append|set"
+WRITE_RE = re.compile(r"\b(?:%s)\s+`([^`\s]+)`" % VERBS, re.IGNORECASE)
+HUMAN_MARK = "separate terminal"
 BASH_FENCE_RE = re.compile(r"^```bash\n(.*?)^```", re.MULTILINE | re.DOTALL)
 INLINE_CMD_RE = re.compile(r"`((?:python3[\w.]*|/\S*python3[\w.]*|git|gh|ls|cat|grep|rg|find|head|tail|wc) [^`]*)`")
 MCP_RE = re.compile(r"\bmcp__\w+__\w+")
@@ -39,7 +41,21 @@ def declared_writes(text):
     return re.findall(r"^- `([^`]+)`", m.group(1), re.MULTILINE) if m else []
 
 
+def human_commands(text):
+    """Backticked commands on lines that send the human to a separate terminal window."""
+    return [c for ln in text.splitlines() if HUMAN_MARK in ln for c in re.findall(r"`([^`]+)`", ln)]
+
+
+def agent_text(text):
+    """The skill text minus the human-only commands."""
+    out = []
+    for ln in text.splitlines():
+        out.append(re.sub(r"`[^`]+`", "", ln) if HUMAN_MARK in ln else ln)
+    return "\n".join(out)
+
+
 def bash_lines(text):
+    text = agent_text(text)
     lines = []
     for body in BASH_FENCE_RE.findall(text):
         lines += [ln.strip() for ln in body.splitlines() if ln.strip() and not ln.strip().startswith("#")]
@@ -85,7 +101,7 @@ class WritePathsTest(unittest.TestCase):
     def test_every_write_instruction_is_declared_and_allowed(self):
         text = text_of(skill_files())
         declared = set(declared_writes(SKILL.read_text(encoding="utf-8")))
-        found = set(WRITE_RE.findall(text))
+        found = {t for t in WRITE_RE.findall(text) if re.search(r"[/.]", t) and not t.startswith("-")}
         self.assertTrue(found)
         self.assertEqual(set(), found - declared, "write instruction for an undeclared path")
         self.assertEqual(set(), declared - found, "declared path with no write instruction")
@@ -163,6 +179,27 @@ class ConfigAgreementTest(unittest.TestCase):
         for name in sorted(manual & present):
             self.assertIn("`%s`" % name, text)  # the bare backticked name, not e.g. CODE_STYLE.md
 
+    def test_none_and_real_value_keys_partition_the_project_keys(self):
+        text = SKILL.read_text(encoding="utf-8")
+        none_ok = set((block("none-ok", text) or "").split())
+        real = set((block("real-value", text) or "").split())
+        self.assertTrue(none_ok and real)
+        self.assertEqual(set(), none_ok & real)
+        self.assertEqual(onboard.PROJECT_KEYS - {"keep_licence"}, none_ok | real)
+
+    def test_none_is_only_allowed_where_no_consumer_pastes_it(self):
+        # Every consumer of a none-ok key's placeholder must be a file where `none` reads naturally.
+        harmless = {"docs/experiments/README.md"}
+        none_ok = set((block("none-ok", SKILL.read_text(encoding="utf-8")) or "").split())
+        out = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True, text=True).stdout
+        for key in sorted(none_ok):
+            name = next(n for n, f in onboard.PLACEHOLDER_FIELDS.items() if f == key)
+            token = "{{%s}}" % name
+            users = {f for f in out.split("\0") if f and onboard._scanned(f) and f not in ("README.md", "setup.sh")
+                     and (ROOT / f).is_file() and not f.startswith("skills/configure/onboard/")
+                     and token in (ROOT / f).read_text(encoding="utf-8")}
+            self.assertLessEqual(users, harmless, "%s: %s" % (key, sorted(users - harmless)))
+
     def test_every_key_needs_a_concrete_value(self):
         text = SKILL.read_text(encoding="utf-8")
         self.assertRegex(text, r"never leave a key empty")
@@ -180,15 +217,35 @@ class ConfigAgreementTest(unittest.TestCase):
         self.assertTrue(CALIBRATE.is_file())
 
 
+class StepReferenceTest(unittest.TestCase):
+    def test_references_point_at_existing_steps(self):
+        text = SKILL.read_text(encoding="utf-8")
+        headings = dict(re.findall(r"^### (\d+)\. (.*)$", text, re.MULTILINE))
+        for n in re.findall(r"\bstep (\d+)\b", text):
+            self.assertIn(n, headings)
+
+    def test_already_configured_path_is_in_the_mode_step(self):
+        text = SKILL.read_text(encoding="utf-8")
+        headings = dict(re.findall(r"^### (\d+)\. (.*)$", text, re.MULTILINE))
+        n = re.search(r"already-configured path of step (\d+)", text).group(1)
+        self.assertIn("mode", headings[n].lower())
+
+
 class NoStrayWriteVerbsTest(unittest.TestCase):
-    VERB_RE = re.compile(r"\b(edit|write|create|modify|append|update|change)\s+(?!`)", re.IGNORECASE)
+    VERB_RE = re.compile(r"\b(%s)\s+(?!`)" % VERBS, re.IGNORECASE)
 
     def test_write_verbs_are_followed_by_a_listed_path(self):
+        declared = set(declared_writes(SKILL.read_text(encoding="utf-8")))
         offenders = []
         for p in skill_files():
             for ln in p.read_text(encoding="utf-8").splitlines():
-                if self.VERB_RE.search(ln) and not ln.lstrip().startswith("description:"):
+                if ln.lstrip().startswith("description:"):
+                    continue
+                if self.VERB_RE.search(ln):
                     offenders.append("%s: %s" % (p.name, ln.strip()[:100]))
+                for tok in WRITE_RE.findall(ln):
+                    if re.search(r"[/.]", tok) and not tok.startswith("-") and tok not in declared:
+                        offenders.append("%s: unlisted target %s" % (p.name, tok))
         self.assertEqual([], offenders)
 
 
@@ -305,15 +362,20 @@ class TemplateFlowTest(unittest.TestCase):
         self.assertIn("`template_mode` is true", text)
         self.assertIn(".yab-template present", text)
 
-    def test_human_only_commands_are_marked_and_limited(self):
+    def test_human_only_commands_run_in_a_separate_terminal_not_via_bang(self):
         text = text_of(skill_files())
-        human = [c for c in re.findall(r"`(! [^`]+)`", text)]
-        self.assertTrue(any("git remote set-url origin" in c for c in human))
-        self.assertTrue(any("onboard.py mark --force" in c for c in human))
+        human = human_commands(text)
+        self.assertTrue(any(c.startswith("git remote set-url origin") for c in human))
+        self.assertTrue(any(c.endswith("onboard.py mark --force") for c in human))
         for c in human:
-            self.assertTrue("set-url origin" in c or "mark --force" in c, c)
-        # Outside those `! ` commands the agent must never be told to run set-url or --force.
-        stripped = re.sub(r"`! [^`]+`", "", text)
+            self.assertTrue(c.startswith("git remote set-url origin") or c.endswith("onboard.py mark --force"), c)
+            self.assertFalse(c.startswith("!"), c)
+        self.assertNotRegex(text, r"`! ")
+        self.assertNotRegex(text, r"runs as the user")
+        for ln in (ln for ln in text.splitlines() if HUMAN_MARK in ln):
+            self.assertRegex(ln, r'say "done"')
+        # Outside those instructions the agent must never be told to run set-url or --force.
+        stripped = agent_text(text)
         self.assertNotIn("set-url", stripped)
         self.assertNotIn("--force", stripped)
 

@@ -56,17 +56,22 @@ Run `check` (exit 1 is normal here; read its JSON). State table:
 |---|---|---|---|---|
 | absent | any | | no sentinel error | Configured (no errors, no placeholders): orientation (step 9), `mark`, stop. Otherwise step 3. |
 | present | YAB | maintaining YAB | `template_mode` true, `ok` true | Orientation (step 9), then `mark` (it works in template mode); stop. |
-| present | YAB | new project from the template | `template_mode` true | Ask the user to run `! git remote set-url origin <their repo URL>` themselves (the gate blocks it for you; `!` runs as the user). Re-run `check`: `template_mode` is now false with the sentinel error below. Continue at step 3; `apply` removes the sentinel. |
-| present | not YAB, or none | | `template_mode` false, error ".yab-template present but origin is not ..." | Treat as an adopter: continue at step 3; `apply` removes the sentinel. If the user says this is a YAB fork for maintenance, ask them to run `! python3.12 scripts/onboard/onboard.py mark --force` in their own terminal (it needs an interactive terminal) and stop. |
+| present | YAB | new project from the template | `template_mode` true | Human step A below. Re-run `check`: `template_mode` is now false with the sentinel error below. Continue at step 3; `apply` removes the sentinel. |
+| present | not YAB, or none | | `template_mode` false, error ".yab-template present but origin is not ..." | Treat as an adopter: continue at step 3; `apply` removes the sentinel. If the user says this is a YAB fork for maintenance, Human step B, then stop. |
 
-When `template_mode` is true, ask: "(a) maintaining YAB itself, or (b) a fresh project created from the template?". Never run `git remote`, delete `.yab-template` or force the marker yourself.
+When `template_mode` is true, ask: "(a) maintaining YAB itself, or (b) a fresh project created from the template?"
+
+Human step A (new project): ask the user to open a separate terminal window, run `git remote set-url origin <their repo URL>` there, and say "done". The gate blocks it for you.
+Human step B (YAB fork for maintenance): ask the user to open a separate terminal window, run `python3.12 scripts/onboard/onboard.py mark --force` there (it needs an interactive terminal), and say "done".
+
+Never run `git remote` yourself, remove the template sentinel yourself, or force the marker; do not use a `!` prefix for these (it may not be a terminal and may still pass through the gate).
 
 ### 3. Collect project config
 
 Read `README.md`, the manifests and `git log --oneline -20` first and propose answers; ask only what cannot be inferred. Then Edit `skill_router.toml`:
 
 - `[providers].pm`: exactly `"linear"` or `"github"` (GitHub Issues). It is mandatory and the only record of the PM tool. If the choice is Linear, check the Linear MCP is authenticated (ask the user to run `/mcp` if the read tools are unavailable) and look up the team and project with `mcp__linear__list_teams` and `mcp__linear__list_projects`.
-- `[project]`: fill these keys. Prefix rule: letters and digits, 2-10 characters, starting with a letter, not `N/A`; default is the initials of a multi-word name, the capital letters of a CamelCase name, or the first 3 letters otherwise.
+- `[project]`: supply these keys. Prefix rule: letters and digits, 2-10 characters, starting with a letter, not `N/A`; default is the initials of a multi-word name, the capital letters of a CamelCase name, or the first 3 letters otherwise.
 
 <!-- onboard:project-keys
 name description architecture_summary issue_prefix git_host pm_project_url team_id project_id
@@ -74,7 +79,21 @@ experiment_tool available_models ai_commit_trailer ai_tool_credit test_command i
 test_harness_file test_harness_class version_file version_field in_qa_paths keep_licence
 -->
 
-Rules: every key gets a concrete single-line value; never leave a key empty. Where a key does not apply, enter the literal `none`. An empty value keeps its placeholder, and some placeholders sit in files outside the list above (experiments, backlog, implement and review skills), so `check` could then never go clean. `project_id` is a real id when `pm` is `"linear"` (`none` for `"github"`); `available_models` is a comma-separated list and is what step 7 maps; `keep_licence` is `true` or `false` and `false` makes `apply` delete `LICENSE`.
+Rules: every key gets a concrete single-line value; never leave a key empty. An empty value keeps its placeholder, and some placeholders sit in files outside the list above (experiments, backlog, implement and review skills), so `check` could then never go clean. But a bare `none` is pasted verbatim by most consumers (commit trailers, PR bodies, the backlog link, project-config tables), so it is only allowed for these keys, whose consumers read it naturally (the experiment line in the experiments README; the team and project ids have no consumer outside the router, which uses the project id only for Linear):
+
+<!-- onboard:none-ok
+experiment_tool team_id project_id
+-->
+
+Every other key needs a real value:
+
+<!-- onboard:real-value
+name description architecture_summary issue_prefix git_host pm_project_url available_models
+ai_commit_trailer ai_tool_credit test_command integration_test_dir test_harness_file test_harness_class
+version_file version_field in_qa_paths
+-->
+
+Proposed defaults: `ai_commit_trailer` is the current agent's trailer line (for Claude, its `Co-Authored-By:` line from the session); `ai_tool_credit` is the matching credit line (for Claude Code, the "Generated with Claude Code" line with its link); `git_host` is the host of `origin`; `pm_project_url` is the Linear project URL, or the repo's `/issues` URL for GitHub Issues. For `integration_test_dir`, `test_harness_file`, `test_harness_class`, `version_file`, `version_field` and `in_qa_paths`, use what the repo really has; when it has none, use a phrase that reads correctly in the table, e.g. `none (no integration test harness)` or `none (no version file)`. `project_id` is a real id when `pm` is `"linear"`, else `none`; `available_models` is a comma-separated list and is what step 7 maps; `keep_licence` is `true` or `false` and `false` makes `apply` delete `LICENSE`.
 
 ### 4. Apply
 
@@ -82,7 +101,7 @@ Run `apply`. It substitutes the `[project]` values everywhere, reconciles `.mcp.
 
 `apply` fills every placeholder that has a `[project]` key. The one placeholder it never fills is `CODE_STYLE` in `AGENTS.md`, which step 6 replaces. If `unresolved` lists anything else, correct the value in `skill_router.toml` and re-run `apply`; values for `skills/shared/project-config.md` (test, version, QA fields) come from there too, so that file needs no hand edit.
 
-### 5. Fill the three artifacts
+### 5. The three artifacts
 
 Follow `@skills/configure/onboard/resources/artifact-guide.md` for inference and for what a filled artifact looks like. For each of the three, show the user the proposed content and get a yes or corrections before writing:
 
@@ -90,12 +109,12 @@ Follow `@skills/configure/onboard/resources/artifact-guide.md` for inference and
 - Write `docs/CODE_STYLE.md`
 - Write `docs/CONSTRAINTS.md` (ask the four constraint questions; do not invent answers)
 
-When writing: remove the `<!-- yab:template -->` marker line, every `<...>` token and the template's guidance comments. Every language in the TECH_STACK Languages table needs a Base standard entry in CODE_STYLE, with the language spelled identically (exact, case-sensitive). If no enforcer is configured for a language, say so instead of inventing one.
+In all three, remove the `<!-- yab:template -->` marker line, every `<...>` token and the template's guidance comments. Every language in the TECH_STACK Languages table needs a Base standard entry in CODE_STYLE, with the language spelled identically (exact, case-sensitive). If no enforcer is configured for a language, say so instead of inventing one.
 
 ### 6. Architecture and agent docs
 
-- Edit `docs/ARCHITECTURE.md`: replace the guidance comments with the real directory tree, layers and dependencies, taken from the repo. Keep it short and factual.
-- Edit `AGENTS.md`: fill the Common Commands (`<test command>`, `<lint command>`, `<build command>`, `<install command>`) from TECH_STACK's Tooling section, and replace the `CODE_STYLE` placeholder line under "Code style" with a one-line summary of the Base standard.
+- Edit `docs/ARCHITECTURE.md`: the real directory tree, layers and dependencies, taken from the repo, go in place of the guidance comments. Keep it short and factual.
+- Edit `AGENTS.md`: the Common Commands (`<test command>`, `<lint command>`, `<build command>`, `<install command>`) come from TECH_STACK's Tooling section, and a one-line summary of the Base standard takes the place of the `CODE_STYLE` placeholder line under "Code style".
 
 ### 7. Model tiers
 
@@ -109,4 +128,4 @@ If the probe found tools the user will need (an interpreter path, a Flutter bina
 
 Run `check`. If `ok` is false, fix every error it lists (and re-run `apply` if the config changed) until it is clean; surface warnings. Then run `mark`: it refuses unless `check` is clean, and forcing the marker is for the human only.
 
-Then give the one-screen orientation per `@skills/configure/onboard/resources/orientation.md`, offer one optional Q&A turn, and hand off: the next step is the `summarize` skill (`/summarize`). In the already-configured path of step 1 the orientation is all there is.
+Then give the one-screen orientation per `@skills/configure/onboard/resources/orientation.md`, offer one optional Q&A turn, and hand off: the next step is the `summarize` skill (`/summarize`). In the already-configured path of step 2 the orientation is all there is.
