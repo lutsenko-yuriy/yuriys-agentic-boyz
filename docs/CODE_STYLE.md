@@ -1,7 +1,7 @@
 <!-- yab:template -->
 # Code Style
 
-<!-- Delete the marker line above once this file is filled in; `onboard.py check` reports the file as missing while it is present. -->
+<!-- Delete the marker line above once this file is filled in; `onboard.py check` reports it as still a template while it is present. -->
 
 ## Base standard
 

@@ -1,7 +1,7 @@
 <!-- yab:template -->
 # Project Constraints
 
-<!-- Delete the marker line above once this file is filled in; `onboard.py check` reports the file as missing while it is present.
+<!-- Delete the marker line above once this file is filled in; `onboard.py check` reports it as still a template while it is present.
      Standing constraints that agents and reviewers weigh when evaluating trade-offs, especially in research tickets. -->
 
 ## Team & capacity

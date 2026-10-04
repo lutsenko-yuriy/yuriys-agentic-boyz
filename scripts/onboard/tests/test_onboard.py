@@ -599,6 +599,12 @@ class ShippedTemplateTests(unittest.TestCase):
             with self.subTest(rel):
                 self.assertTrue(shipped(rel).startswith(MARKER))
 
+    def test_marker_comment_describes_actual_check_wording(self):
+        for rel in onboard.ARTIFACTS:
+            with self.subTest(rel):
+                self.assertIn("reports it as still a template", shipped(rel))
+                self.assertNotIn("as missing", shipped(rel))
+
     def test_fresh_templates_reported_missing(self):
         r = self.check({rel: shipped(rel) for rel in onboard.ARTIFACTS})
         for rel in onboard.ARTIFACTS:

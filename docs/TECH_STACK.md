@@ -1,7 +1,7 @@
 <!-- yab:template -->
 # Tech Stack
 
-<!-- Delete the marker line above once this file is filled in; `onboard.py check` reports the file as missing while it is present.
+<!-- Delete the marker line above once this file is filled in; `onboard.py check` reports it as still a template while it is present.
      Agents read this file to know which languages, tools and platforms the project uses. -->
 
 ## Languages
