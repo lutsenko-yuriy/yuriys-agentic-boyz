@@ -9,8 +9,8 @@ treated as one (a quoted `'|'` splits the pipeline and usually fails on the empt
 denied for the same reason (bash brace expansion), which also rejects quoted jq object literals.
 
 Flag checks follow getopt: a short cluster (`-ro`) is denied if any letter is denied, even one that is really another
-flag's value, and a long option is denied if it is an abbreviation (`--out`) of a denied one. Arguments after `--`
-are operands.
+flag's value, and a long option is denied if it is an abbreviation (`--out`) of a denied one. `--` is not trusted as
+end-of-options: a value flag can swallow it (`sort -T -- -o out`), so arguments after it are checked too.
 
 Known residuals (repo config, not command line): `diff.external`, textconv filters and `core.fsmonitor` in the target
 repo's config can run programs on `git diff`/`log`/`status`. Unquoted globs still expand, so a file named like a flag
@@ -40,6 +40,7 @@ INSPECTION_COMMANDS = (
 # --compress-program execs; rg --pre/--hostname-bin run programs; date -s sets the clock; tree -o writes and -R
 # writes 00Tree.html per directory; file -C writes magic.mgc.
 FIND_DENIED = frozenset("-exec -execdir -ok -okdir -delete -fprint -fprint0 -fprintf -fls".split())
+UNIQ_VALUE_FLAGS = frozenset({"-f", "-s", "-w"})
 FLAG_RULES = {
     "sort": (frozenset("o"), ("--output", "--compress-program")),
     "rg": (frozenset(), ("--pre", "--hostname-bin")),
@@ -124,7 +125,7 @@ def _check_inspection(name: str, args: List[str]) -> Result:
     if name == "find":
         bad = next((a for a in args if a in FIND_DENIED), "")
     elif name == "uniq":
-        bad = args[0] if len(_operands(args)) > 1 else ""
+        bad = _uniq_extra_arg(args)
     elif name in FLAG_RULES:
         bad = _denied_flag(args, *FLAG_RULES[name])
     else:
@@ -134,19 +135,26 @@ def _check_inspection(name: str, args: List[str]) -> Result:
     return OK
 
 
-def _operands(args: List[str]) -> List[str]:
-    """Non-option arguments: a lone `-` (stdin) and everything after `--` count."""
-    if "--" in args:
-        i = args.index("--")
-        return [a for a in args[:i] if a == "-" or not a.startswith("-")] + args[i + 1:]
-    return [a for a in args if a == "-" or not a.startswith("-")]
+def _uniq_extra_arg(args: List[str]) -> str:
+    """Return the first arg after uniq's input operand: BSD uniq reads the next arg as the output file, `-x` included."""
+    i, after_dashdash = 0, False
+    while i < len(args):
+        arg = args[i]
+        if arg == "--" and not after_dashdash:
+            after_dashdash = True
+        elif after_dashdash or arg == "-" or not arg.startswith("-"):
+            return args[i + 1] if i + 1 < len(args) else ""
+        elif arg in UNIQ_VALUE_FLAGS:
+            i += 1
+        i += 1
+    return ""
 
 
 def _denied_flag(args: List[str], short: frozenset, long_names: Tuple[str, ...]) -> str:
-    """Return the first arg that is, contains (short cluster) or abbreviates (long) a denied flag; stop at `--`."""
+    """Return the first arg that is, contains (short cluster) or abbreviates (long) a denied flag."""
     for arg in args:
         if arg == "--":
-            break
+            continue
         if arg.startswith("--"):
             name = _long_name(arg)
             if any(name.startswith(full) or (len(name) >= 3 and full.startswith(name)) for full in long_names):
