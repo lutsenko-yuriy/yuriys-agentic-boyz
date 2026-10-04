@@ -4,10 +4,11 @@
 Usage:
     python3 scripts/onboard/onboard.py probe            # read-only machine report (Python 3.9 ok)
     python3 scripts/onboard/onboard.py check            # read-only JSON report; exit 1 if not clean
+    python3 scripts/onboard/onboard.py apply            # fill placeholders from skill_router.toml, reconcile the rest
     python3 scripts/onboard/onboard.py mark [--force]   # write the per-clone onboarded marker
 
-`check` and `mark` read skill_router.toml and need Python 3.11+ (tomllib); they fail loudly (exit 2) otherwise.
-Exit codes: 0 ok, 1 check not clean / mark refused, 2 no tomllib, 3 could not run (not a git repo, bad TOML, ...).
+`check`, `apply` and `mark` read skill_router.toml and need Python 3.11+ (tomllib); they fail loudly (exit 2) otherwise.
+Exit codes: 0 ok, 1 check not clean / mark or apply refused, 2 no tomllib, 3 could not run (not a git repo, bad TOML, ...).
 """
 
 import argparse
@@ -16,6 +17,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -45,6 +47,22 @@ ARTIFACTS = ["docs/TECH_STACK.md", "docs/CODE_STYLE.md", "docs/CONSTRAINTS.md"]
 REQUIRED_PROJECT_FIELDS = ["name", "description", "issue_prefix"]
 NOTES_DIR = "docs/knowledge/notes"
 NOTES_SKIP = {"BOOKMARKS.md", "INDEX.md", "TEMPLATE.md"}
+# placeholder -> [project] field; PM_TOOL is derived from [providers].pm. Others (FRAMEWORK, STACK, ...) belong to the
+# tech-stack artifacts and are never filled by apply.
+PLACEHOLDER_FIELDS = {
+    "AI_COMMIT_TRAILER": "ai_commit_trailer", "AI_TOOL_CREDIT": "ai_tool_credit",
+    "ARCHITECTURE_SUMMARY": "architecture_summary", "AVAILABLE_MODELS": "available_models",
+    "EXPERIMENT_TOOL": "experiment_tool", "GIT_HOST": "git_host", "INTEGRATION_TEST_DIR": "integration_test_dir",
+    "IN_QA_PATHS": "in_qa_paths", "ISSUE_PREFIX": "issue_prefix", "PM_PROJECT_URL": "pm_project_url",
+    "PROJECT_DESCRIPTION": "description", "PROJECT_ID": "project_id", "PROJECT_NAME": "name",
+    "TEAM_ID": "team_id", "TEST_COMMAND": "test_command", "TEST_HARNESS_CLASS": "test_harness_class",
+    "TEST_HARNESS_FILE": "test_harness_file", "VERSION_FIELD": "version_field", "VERSION_FILE": "version_file",
+}
+LIST_FIELDS = {"available_models", "in_qa_paths"}
+PM_TOOLS = {
+    "linear": "Linear", "github_issues": "GitHub Issues", "jira": "Jira", "shortcut": "Shortcut", "notion": "Notion",
+}
+MCP_LINEAR = {"type": "http", "url": "https://mcp.linear.app/mcp"}
 TOOLCHAINS = ["git", "gh", "ollama", "flutter", "dart", "node", "npm", "java", "gradle", "kotlinc", "cargo", "go", "ruby"]
 ENV_KEY_RE = re.compile(r"(_KEY|_TOKEN|_SECRET|_PAT)$")
 ENV_IGNORE_PREFIX = "CLAUDE_CODE_"
@@ -52,6 +70,10 @@ ENV_IGNORE_PREFIX = "CLAUDE_CODE_"
 
 class OnboardError(Exception):
     pass
+
+
+class Refused(OnboardError):
+    """A deliberate refusal (exit 1), as opposed to a failure to run (exit 3)."""
 
 
 def valid_prefix(prefix: str) -> bool:
@@ -133,7 +155,7 @@ def _tracked_files(root: Path) -> List[str]:
 def _read_regular(path: Path) -> Optional[str]:
     if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_SCAN_BYTES:
         return None
-    return path.read_text(encoding="utf-8")
+    return path.read_bytes().decode("utf-8")  # not read_text: that would turn CRLF into LF on a later rewrite
 
 
 def _section(text: str, heading: str) -> str:
@@ -290,6 +312,142 @@ def check(root: Path) -> Dict[str, Any]:
     }
 
 
+def _read_config(root: Path) -> tuple:
+    path = root / "skill_router.toml"
+    if not path.is_file():
+        raise OnboardError("skill_router.toml missing")
+    try:
+        cfg = load_toml(path)
+    except ValueError as e:
+        raise OnboardError("skill_router.toml: %s" % e)
+    project, providers = cfg.get("project", {}), cfg.get("providers", {})
+    if not isinstance(project, dict) or not isinstance(providers, dict):
+        raise OnboardError("skill_router.toml: [project] and [providers] must be tables")
+    return project, providers
+
+
+def _values(project: Dict[str, Any], pm: str) -> Dict[str, str]:
+    """Non-empty placeholder values only: an empty one must stay a placeholder so `check` still reports it."""
+    values: Dict[str, str] = {}
+    for name, field in PLACEHOLDER_FIELDS.items():
+        raw = project.get(field, "")
+        if field in LIST_FIELDS and isinstance(raw, list) and all(isinstance(i, str) for i in raw):
+            raw = ", ".join(i.strip() for i in raw if i.strip())
+        if not isinstance(raw, str):
+            raise OnboardError("skill_router.toml: project.%s must be a string" % field)
+        raw = raw.strip()
+        if PLACEHOLDER_RE.search(raw):
+            raise OnboardError("skill_router.toml: project.%s must not contain a {{PLACEHOLDER}}" % field)
+        if raw:
+            values[name] = raw
+    if pm:
+        values["PM_TOOL"] = PM_TOOLS[pm]
+    return values
+
+
+def _plan_mcp(root: Path, pm: str) -> Optional[str]:
+    """None: leave .mcp.json alone. "": delete it. Otherwise its new text. The linear server iff pm == linear."""
+    if not pm:
+        return None
+    path = root / ".mcp.json"
+    exists = os.path.lexists(path)
+    if exists and (path.is_symlink() or not path.is_file()):
+        raise OnboardError(".mcp.json is not a regular file")
+    try:
+        cfg = json.loads(path.read_bytes().decode("utf-8")) if exists else {}
+    except ValueError as e:
+        raise OnboardError(".mcp.json is not valid JSON: %s" % e)
+    servers = cfg.get("mcpServers", {}) if isinstance(cfg, dict) else None
+    if not isinstance(servers, dict):
+        raise OnboardError('.mcp.json must be an object with an object "mcpServers"')
+    servers = dict(servers)
+    if pm != "linear":
+        servers.pop("linear", None)
+    elif not isinstance(servers.get("linear"), dict):
+        servers["linear"] = dict(MCP_LINEAR)
+    new = {k: v for k, v in cfg.items() if k != "mcpServers"}
+    if servers:
+        new["mcpServers"] = servers
+    if not new:
+        return "" if exists else None
+    return None if new == cfg else json.dumps(new, indent=2) + "\n"
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".onboard-")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(text.encode("utf-8"))
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def apply(root: Path) -> Dict[str, Any]:
+    """Plan everything (reads, validation) before the first write; each file is then replaced atomically.
+
+    Sentinel last: if a write fails midway, the files already written are whole and a re-run finishes the job.
+    """
+    if _template_mode(root, []):
+        raise Refused("this is the YAB template itself (.yab-template, origin is YAB): apply would fill it in; refusing")
+    project, providers = _read_config(root)
+    pm = providers.get("pm", "")
+    if not isinstance(pm, str) or pm.strip() not in dict(PM_TOOLS, **{"": ""}):
+        raise OnboardError(
+            "skill_router.toml: providers.pm %r must be one of %s (or empty)" % (pm, ", ".join(sorted(PM_TOOLS)))
+        )
+    pm = pm.strip()
+    keep_licence = project.get("keep_licence", True)
+    if not isinstance(keep_licence, bool):
+        raise OnboardError("skill_router.toml: project.keep_licence must be true or false")
+    values = _values(project, pm)
+    mcp = _plan_mcp(root, pm)
+    edits: Dict[str, str] = {}
+    unresolved: Dict[str, List[str]] = {}
+    for rel in _tracked_files(root):
+        if not _scanned(rel):
+            continue
+        try:
+            text = _read_regular(root / rel)
+        except (UnicodeDecodeError, OSError):
+            continue
+        if text is None:
+            continue
+        new = PLACEHOLDER_RE.sub(lambda m: values.get(m.group(0)[2:-2], m.group(0)), text)
+        if new != text:
+            edits[rel] = new
+        left = sorted(set(PLACEHOLDER_RE.findall(new)))
+        if left:
+            unresolved[rel] = left
+    for rel, text in edits.items():
+        _write_atomic(root / rel, text)
+    if mcp == "":
+        os.unlink(root / ".mcp.json")
+    elif mcp is not None:
+        _write_atomic(root / ".mcp.json", mcp)
+    license_path = root / "LICENSE"
+    license_deleted = not keep_licence and (license_path.is_symlink() or license_path.is_file())
+    if license_deleted:
+        os.unlink(license_path)
+    sentinel = root / ".yab-template"
+    sentinel_deleted = os.path.lexists(sentinel) and not sentinel.is_dir()
+    if sentinel_deleted:
+        os.unlink(sentinel)
+    return {
+        "changed": sorted(edits),
+        "unresolved": unresolved,
+        "mcp": "deleted" if mcp == "" else "unchanged" if mcp is None else "written",
+        "license_deleted": license_deleted,
+        "sentinel_deleted": sentinel_deleted,
+    }
+
+
 def marker_path(root: Path) -> Path:
     common = Path(_git(root, "rev-parse", "--git-common-dir"))
     if not common.is_absolute():
@@ -339,6 +497,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("probe")
     sub.add_parser("check")
+    sub.add_parser("apply")
     sub.add_parser("mark").add_argument("--force", action="store_true")
     try:
         args = ap.parse_args(argv)
@@ -353,7 +512,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             result = check(root)
             print(json.dumps(result, indent=2))
             return 0 if result["ok"] else 1
+        if args.cmd == "apply":
+            print(json.dumps(apply(root), indent=2))
+            return 0
         return mark(root, args.force)
+    except Refused as e:
+        sys.stderr.write("onboard: %s\n" % e)
+        return 1
     except (OnboardError, OSError, subprocess.SubprocessError) as e:
         sys.stderr.write("onboard: %s\n" % e)
         return 3
