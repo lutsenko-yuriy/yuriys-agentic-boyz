@@ -34,13 +34,36 @@ class PrefixTests(unittest.TestCase):
         self.assertEqual(onboard.default_prefix("CheckLister"), "CL")
         self.assertEqual(onboard.default_prefix("mordovorot"), "MOR")
 
+    def test_defaults_are_always_valid_or_empty(self):
+        self.assertEqual(onboard.default_prefix("2048 Game"), "GAM")
+        self.assertEqual(onboard.default_prefix("X"), "")
+        self.assertEqual(onboard.default_prefix(" ".join("abcdefghijkl")), "ABCDEFGHIJ")
+
 
 class ProbeTests(unittest.TestCase):
     def test_reports_env_names_never_values(self):
-        with mock.patch.dict("os.environ", {"OPENAI_API_KEY": "sekrit-value", "HOME": "/x"}):
-            data = onboard.probe()
-        self.assertIn("OPENAI_API_KEY", data["env_vars_set"])
+        env = {"OPENAI_API_KEY": "sekrit-value", "HOME": "/x", "CLAUDE_CODE_MESSAGING_TOKEN": "t", "AWS_SECRET": "s"}
+        with mock.patch.dict("os.environ", env, clear=True):
+            data = onboard.probe(run_tools=False)
+        self.assertEqual(data["env_vars_set"], ["AWS_SECRET", "OPENAI_API_KEY"])
         self.assertNotIn("sekrit-value", json.dumps(data))
+
+    def test_tool_failures_are_independent_and_keys_stable(self):
+        def fake_run(cmd, **kw):
+            if cmd[0] == "ollama":
+                raise OSError("daemon down")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        with mock.patch("shutil.which", return_value="/bin/x"), mock.patch("subprocess.run", side_effect=fake_run):
+            data = onboard.probe()
+        self.assertIsNone(data["ollama_models"])
+        self.assertTrue(data["gh_authenticated"])
+
+    def test_tool_keys_present_when_tools_absent(self):
+        with mock.patch("shutil.which", return_value=None):
+            data = onboard.probe()
+        self.assertIsNone(data["ollama_models"])
+        self.assertIsNone(data["gh_authenticated"])
 
     def test_toolchains_via_which_without_executing(self):
         with mock.patch("shutil.which", side_effect=lambda n: "/bin/" + n if n == "git" else None), mock.patch(
@@ -68,7 +91,9 @@ class LoadTomlTests(unittest.TestCase):
         self.assertIn("python3.12", err.getvalue())
 
     def test_probe_cli_works_without_tomllib(self):
-        with mock.patch.dict(sys.modules, {"tomllib": None}), redirect_stdout(io.StringIO()) as out:
+        with mock.patch.dict(sys.modules, {"tomllib": None}), mock.patch(
+            "shutil.which", return_value=None
+        ), redirect_stdout(io.StringIO()) as out:
             code = onboard.main(["probe"])
         self.assertEqual(code, 0)
         json.loads(out.getvalue())
@@ -141,7 +166,7 @@ class CheckTests(unittest.TestCase):
     def test_untracked_files_ignored_for_placeholders(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_repo(tmp)
-            (root / "scratch.md").write_text("{{X}}")
+            (root / "scratch.md").write_text("{{STACK}}")
             self.assertEqual(run_check(root)["placeholders"], {})
 
     def test_missing_artifact(self):
@@ -184,16 +209,93 @@ class CheckTests(unittest.TestCase):
         r = self.check({".yab-template": ""})
         self.assertTrue(r["template_mode"])
 
+    def test_template_mode_tolerates_template_state(self):
+        r = self.check({
+            ".yab-template": "",
+            "AGENTS.md": "{{PROJECT_NAME}}",
+            "docs/TECH_STACK.md": TEMPLATE_DOC,
+            "skill_router.toml": "[providers]\n",
+        })
+        self.assertTrue(r["ok"], r)
+
+    def test_template_mode_still_requires_artifacts(self):
+        r = self.check({".yab-template": "", "docs/CONSTRAINTS.md": None})
+        self.assertFalse(r["ok"])
+
+    def test_only_known_placeholders_count(self):
+        r = self.check({
+            "gen.py": 'x = f".//{{{SVG_NS}}}g"\n',
+            "flow.py": "appId: ${{APP_ID}}\n",
+            "README.md": "{{NOT_OURS}}\n",
+        })
+        self.assertTrue(r["ok"], r)
+
+    def test_history_files_skipped(self):
+        r = self.check({"docs/knowledge/notes/HL-1.md": "`{{ISSUE_PREFIX}}-XX`", "docs/CHANGELOG.md": "{{STACK}}"})
+        self.assertTrue(r["ok"], r)
+
+    def test_symlinks_not_followed(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
+            (Path(outside) / "secret.md").write_text("{{STACK}}")
+            root = make_repo(tmp)
+            (root / "link.md").symlink_to(Path(outside) / "secret.md")
+            git(root, "add", "-A")
+            self.assertTrue(run_check(root)["ok"])
+
+    def test_language_match_is_whole_word(self):
+        tech = GOOD_TECH.replace("| Dart | 3.6 |", "| Go | 1.22 |\n| Java | 17 |")
+        style = "## Base standard\n\nGoogle Shell Style Guide; JavaScript standard.\n"
+        r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style})
+        self.assertIn("Go", self.msgs(r))
+        self.assertIn("Java", self.msgs(r))
+
+    def test_language_alternatives_each_required(self):
+        tech = GOOD_TECH.replace("| Dart | 3.6 |", "| TypeScript / JavaScript | 5 |")
+        style = "## Base standard\n\nTypeScript and JavaScript: ESLint.\n"
+        self.assertTrue(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style})["ok"])
+
+    def test_missing_languages_section(self):
+        r = self.check({"docs/TECH_STACK.md": "# Stack\n"})
+        self.assertIn("Languages", self.msgs(r))
+
+    def test_unreadable_artifact_is_reported_not_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp)
+            (root / "docs/CONSTRAINTS.md").write_bytes(b"\xff\xfe bad")
+            r = run_check(root)
+        self.assertIn("docs/CONSTRAINTS.md", self.msgs(r))
+
     def test_cli_exit_codes_and_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_repo(tmp)
             with redirect_stdout(io.StringIO()) as out:
                 self.assertEqual(onboard.main(["--root", str(root), "check"]), 0)
             self.assertTrue(json.loads(out.getvalue())["ok"])
-            (root / "AGENTS.md").write_text("{{X}}")
+            (root / "AGENTS.md").write_text("{{STACK}}")
             git(root, "add", "-A")
             with redirect_stdout(io.StringIO()):
                 self.assertEqual(onboard.main(["--root", str(root), "check"]), 1)
+
+    def test_cli_errors_exit_3_not_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": "[broken\n"})
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+                self.assertEqual(onboard.main(["--root", str(root), "check"]), 3)
+            self.assertIn("onboard:", err.getvalue())
+
+    def test_not_a_git_repo_exit_3(self):
+        with tempfile.TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()), mock.patch(
+            "sys.stderr", new_callable=io.StringIO
+        ):
+            self.assertEqual(onboard.main(["--root", tmp, "check"]), 3)
+
+    def test_default_root_is_repo_toplevel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp)
+            sub = root / "docs"
+            with mock.patch("os.getcwd", return_value=str(sub)), redirect_stdout(io.StringIO()) as out:
+                code = onboard.main(["check"])
+            self.assertEqual(code, 0, out.getvalue())
 
 
 TEMPLATE_DOC = "<!-- yab:template -->\n# T\n"
@@ -213,17 +315,41 @@ class MarkTests(unittest.TestCase):
 
     def test_mark_refuses_when_not_clean(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_repo(tmp, {"AGENTS.md": "{{X}}"})
+            root = make_repo(tmp, {"AGENTS.md": "{{STACK}}"})
             with redirect_stdout(io.StringIO()):
                 self.assertEqual(onboard.main(["--root", str(root), "mark"]), 1)
             self.assertFalse((root / ".git" / "yab" / "onboarded").exists())
 
-    def test_mark_force(self):
+    def test_mark_force_from_terminal(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_repo(tmp, {"AGENTS.md": "{{X}}"})
-            with redirect_stdout(io.StringIO()):
+            root = make_repo(tmp, {"AGENTS.md": "{{STACK}}"})
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stdin.isatty", return_value=True):
                 self.assertEqual(onboard.main(["--root", str(root), "mark", "--force"]), 0)
             self.assertTrue((root / ".git" / "yab" / "onboarded").exists())
+
+    def test_mark_force_refused_without_terminal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"AGENTS.md": "{{STACK}}"})
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stdin.isatty", return_value=False), mock.patch(
+                "sys.stderr", new_callable=io.StringIO
+            ):
+                self.assertEqual(onboard.main(["--root", str(root), "mark", "--force"]), 1)
+            self.assertFalse((root / ".git" / "yab" / "onboarded").exists())
+
+    def test_mark_outside_git_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()), mock.patch(
+            "sys.stdin.isatty", return_value=True
+        ), mock.patch("sys.stderr", new_callable=io.StringIO):
+            self.assertEqual(onboard.main(["--root", tmp, "mark", "--force"]), 3)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_mark_unborn_head(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git(root, "init", "-q")
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stdin.isatty", return_value=True):
+                onboard.main(["--root", str(root), "mark", "--force"])
+            self.assertIn("sha=unknown", (root / ".git" / "yab" / "onboarded").read_text())
 
     def test_marker_visible_from_worktree(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as wt:

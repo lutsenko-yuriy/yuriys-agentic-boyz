@@ -7,6 +7,7 @@ Usage:
     python3 scripts/onboard/onboard.py mark [--force]   # write the per-clone onboarded marker
 
 `check` and `mark` read skill_router.toml and need Python 3.11+ (tomllib); they fail loudly (exit 2) otherwise.
+Exit codes: 0 ok, 1 check not clean / mark refused, 2 no tomllib, 3 could not run (not a git repo, bad TOML, ...).
 """
 
 import argparse
@@ -17,19 +18,36 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 PREFIX_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]{1,9}$")
 PREFIX_REJECT = {"NA"}
-PLACEHOLDER_RE = re.compile(r"\{\{[A-Z][A-Z0-9_]*\}\}")
+KNOWN_PLACEHOLDERS = [
+    "AI_COMMIT_TRAILER", "AI_TOOL_CREDIT", "ARCHITECTURE_SUMMARY", "AVAILABLE_MODELS", "CODE_STYLE",
+    "EXPERIMENT_TOOL", "FRAMEWORK", "GIT_HOST", "INTEGRATION_TEST_DIR", "IN_QA_PATHS", "ISSUE_PREFIX",
+    "PERSISTENCE", "PM_PROJECT_URL", "PM_TOOL", "PROJECT_DESCRIPTION", "PROJECT_ID", "PROJECT_NAME", "STACK",
+    "STATE_MANAGEMENT", "TEAM_ID", "TEST_COMMAND", "TEST_HARNESS_CLASS", "TEST_HARNESS_FILE", "VERSION_FIELD",
+    "VERSION_FILE",
+]
+# Lookarounds keep brace-escapes like f"{{{X}}}" or ${{X}} from matching.
+PLACEHOLDER_RE = re.compile(r"(?<![{$])\{\{(?:%s)\}\}(?!\})" % "|".join(KNOWN_PLACEHOLDERS))
+# Historical text may quote placeholders legitimately.
+SCAN_SKIP_PREFIXES = ("scripts/onboard/", "docs/knowledge/", "docs/CHANGELOG.md")
+MAX_SCAN_BYTES = 1_000_000
 TEMPLATE_MARKER = "<!-- yab:template -->"
 ARTIFACTS = ["docs/TECH_STACK.md", "docs/CODE_STYLE.md", "docs/CONSTRAINTS.md"]
 REQUIRED_PROJECT_FIELDS = ["name", "description", "issue_prefix"]
 NOTES_DIR = "docs/knowledge/notes"
 NOTES_SKIP = {"BOOKMARKS.md", "INDEX.md", "TEMPLATE.md"}
 TOOLCHAINS = ["git", "gh", "ollama", "flutter", "dart", "node", "npm", "java", "gradle", "kotlinc", "cargo", "go", "ruby"]
-ENV_KEY_RE = re.compile(r"(_API_KEY|_TOKEN)$")
+ENV_KEY_RE = re.compile(r"(_KEY|_TOKEN|_SECRET|_PAT)$")
+ENV_IGNORE_PREFIX = "CLAUDE_CODE_"
+
+
+class OnboardError(Exception):
+    pass
 
 
 def valid_prefix(prefix: str) -> bool:
@@ -37,14 +55,18 @@ def valid_prefix(prefix: str) -> bool:
 
 
 def default_prefix(name: str) -> str:
+    """Returns "" when no valid prefix can be derived, so the caller must ask."""
     words = re.findall(r"[A-Za-z0-9]+", name)
     if len(words) > 1:
-        return "".join(w[0] for w in words).upper()
-    word = words[0] if words else ""
-    humps = re.findall(r"[A-Z]", word)
-    if len(humps) > 1 and not word.isupper():
-        return "".join(humps)
-    return word[:3].upper()
+        cand = "".join(w[0] for w in words).upper()[:10]
+    else:
+        word = words[0] if words else ""
+        humps = re.findall(r"[A-Z]", word)
+        cand = "".join(humps) if len(humps) > 1 and not word.isupper() else word[:3].upper()
+    if valid_prefix(cand):
+        return cand
+    cand = re.sub(r"[^A-Za-z]", "", name)[:3].upper()
+    return cand if valid_prefix(cand) else ""
 
 
 def load_toml(path: Path) -> Dict[str, Any]:
@@ -57,43 +79,55 @@ def load_toml(path: Path) -> Dict[str, Any]:
         return tomllib.load(f)
 
 
-def _run(cmd: List[str], cwd: Optional[Path] = None) -> str:
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=10).stdout.strip()
+def _tool(cmd: List[str]) -> Optional[subprocess.CompletedProcess]:
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
 
 
 def probe(run_tools: bool = True) -> Dict[str, Any]:
-    """Names only, never env values; toolchains detected via which, never executed."""
-    data = {
-        "env_vars_set": sorted(k for k, v in os.environ.items() if v and ENV_KEY_RE.search(k)),
+    """Env values are never read out. Toolchains are only located; ollama/gh run only when run_tools."""
+    data: Dict[str, Any] = {
+        "env_vars_set": sorted(
+            k for k, v in os.environ.items() if v and ENV_KEY_RE.search(k) and not k.startswith(ENV_IGNORE_PREFIX)
+        ),
         "toolchains": {t: shutil.which(t) is not None for t in TOOLCHAINS},
         "pythons_with_tomllib": [
             n for n in ("python3.11", "python3.12", "python3.13", "python3.14") if shutil.which(n)
         ],
+        "ollama_models": None,
+        "gh_authenticated": None,
     }
-    if run_tools:
-        try:
-            if data["toolchains"]["ollama"]:
-                lines = _run(["ollama", "list"]).splitlines()[1:]
-                data["ollama_models"] = [ln.split()[0] for ln in lines if ln.strip()]
-            if data["toolchains"]["gh"]:
-                data["gh_authenticated"] = subprocess.run(
-                    ["gh", "auth", "status"], capture_output=True, timeout=10
-                ).returncode == 0
-        except (OSError, subprocess.SubprocessError):
-            pass
+    if run_tools and data["toolchains"]["ollama"]:
+        res = _tool(["ollama", "list"])
+        if res is not None and res.returncode == 0:
+            data["ollama_models"] = [ln.split()[0] for ln in res.stdout.splitlines()[1:] if ln.strip()]
+    if run_tools and data["toolchains"]["gh"]:
+        res = _tool(["gh", "auth", "status"])
+        if res is not None:
+            data["gh_authenticated"] = res.returncode == 0
     return data
 
 
-def _git(root: Path, *args: str) -> str:
-    return _run(["git", "-C", str(root), *args])
+def _git(root: Path, *args: str, allow_fail: bool = False) -> str:
+    res = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=10)
+    if res.returncode != 0:
+        if allow_fail:
+            return ""
+        raise OnboardError("git %s failed in %s: %s" % (" ".join(args), root, res.stderr.strip()))
+    return res.stdout.strip()
 
 
 def _tracked_files(root: Path) -> List[str]:
-    out = subprocess.run(
-        ["git", "-C", str(root), "-c", "core.quotePath=false", "ls-files", "-z"],
-        capture_output=True, text=True, check=True,
-    ).stdout
+    out = _git(root, "-c", "core.quotePath=false", "ls-files", "-z")
     return [f for f in out.split("\0") if f]
+
+
+def _read_regular(path: Path) -> Optional[str]:
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_SCAN_BYTES:
+        return None
+    return path.read_text(encoding="utf-8")
 
 
 def _section(text: str, heading: str) -> str:
@@ -104,7 +138,11 @@ def _section(text: str, heading: str) -> str:
 def _languages(tech_stack: str) -> List[str]:
     rows = [ln for ln in _section(tech_stack, "Languages").splitlines() if ln.strip().startswith("|")]
     names = [r.strip().strip("|").split("|")[0].strip().strip("`*") for r in rows[2:]]
-    return [n for n in names if n]
+    return [part.strip() for n in names for part in re.split(r"[/,]", n) if part.strip()]
+
+
+def _mentions(text: str, word: str) -> bool:
+    return re.search(r"(?<![A-Za-z0-9])%s(?![A-Za-z0-9])" % re.escape(word), text, re.IGNORECASE) is not None
 
 
 def _check_config(root: Path, errors: List[str]) -> str:
@@ -126,34 +164,49 @@ def _check_config(root: Path, errors: List[str]) -> str:
 
 
 def check(root: Path) -> Dict[str, Any]:
+    """In template mode (YAB itself) unfilled placeholders, template artifacts and empty config are expected."""
+    template_mode = (root / ".yab-template").exists()
     errors: List[str] = []
     warnings: List[str] = []
     placeholders: Dict[str, List[str]] = {}
     for rel in _tracked_files(root):
-        if rel.startswith("scripts/onboard/"):
+        if rel.startswith(SCAN_SKIP_PREFIXES):
             continue
         try:
-            found = sorted(set(PLACEHOLDER_RE.findall((root / rel).read_text(encoding="utf-8"))))
+            text = _read_regular(root / rel)
         except (UnicodeDecodeError, OSError):
             continue
+        found = sorted(set(PLACEHOLDER_RE.findall(text or "")))
         if found:
             placeholders[rel] = found
-    if placeholders:
+    if placeholders and not template_mode:
         errors.append("%d file(s) still contain {{...}} placeholders" % len(placeholders))
     texts = {}
     for rel in ARTIFACTS:
         p = root / rel
         if not p.is_file():
             errors.append("%s missing" % rel)
-        else:
-            texts[rel] = p.read_text(encoding="utf-8")
-            if TEMPLATE_MARKER in texts[rel]:
-                errors.append("%s is still a template" % rel)
-    prefix = _check_config(root, errors)
-    if "docs/TECH_STACK.md" in texts and "docs/CODE_STYLE.md" in texts:
-        base = _section(texts["docs/CODE_STYLE.md"], "Base standard").lower()
-        for lang in _languages(texts["docs/TECH_STACK.md"]):
-            if lang.lower() not in base:
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError) as e:
+            errors.append("%s unreadable: %s" % (rel, e))
+            continue
+        if TEMPLATE_MARKER not in text:
+            texts[rel] = text
+        elif not template_mode:
+            errors.append("%s is still a template" % rel)
+    config_errors: List[str] = []
+    prefix = _check_config(root, config_errors)
+    if not template_mode:
+        errors.extend(config_errors)
+    if "docs/TECH_STACK.md" in texts:
+        langs = _languages(texts["docs/TECH_STACK.md"])
+        if not langs:
+            errors.append("docs/TECH_STACK.md has no ## Languages table rows")
+        base = _section(texts.get("docs/CODE_STYLE.md", ""), "Base standard")
+        for lang in langs if "docs/CODE_STYLE.md" in texts else []:
+            if not _mentions(base, lang):
                 errors.append("CODE_STYLE Base standard does not cover TECH_STACK language %s" % lang)
     notes = root / NOTES_DIR
     if prefix and valid_prefix(prefix) and notes.is_dir():
@@ -163,7 +216,7 @@ def check(root: Path) -> Dict[str, Any]:
                 warnings.append("note %s does not match prefix %s-N" % (n.name, prefix))
     return {
         "ok": not errors,
-        "template_mode": (root / ".yab-template").exists(),
+        "template_mode": template_mode,
         "errors": errors,
         "warnings": warnings,
         "placeholders": placeholders,
@@ -178,34 +231,52 @@ def marker_path(root: Path) -> Path:
 
 
 def mark(root: Path, force: bool) -> int:
+    # --force is for a human at a terminal; Claude's Bash has no TTY, so it cannot bypass the gate this way.
+    if force and not sys.stdin.isatty():
+        sys.stderr.write("onboard: --force is only allowed from an interactive terminal\n")
+        return 1
     if not force and not check(root)["ok"]:
         sys.stderr.write("onboard: check is not clean; refusing to mark (fix issues, or --force)\n")
         return 1
     marker = marker_path(root)
     marker.parent.mkdir(parents=True, exist_ok=True)
     stamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-    marker.write_text("onboarded=%s\nsha=%s\n" % (stamp, _git(root, "rev-parse", "HEAD")))
+    sha = _git(root, "rev-parse", "--verify", "-q", "HEAD", allow_fail=True) or "unknown"
+    fd, tmp = tempfile.mkstemp(dir=str(marker.parent))
+    with os.fdopen(fd, "w") as f:
+        f.write("onboarded=%s\nsha=%s\n" % (stamp, sha))
+    os.replace(tmp, marker)
     print(marker)
     return 0
 
 
+def _resolve_root(arg: Optional[str]) -> Path:
+    if arg:
+        return Path(arg).resolve()
+    return Path(_git(Path(os.getcwd()), "rev-parse", "--show-toplevel")).resolve()
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="onboard")
-    ap.add_argument("--root", default=".")
+    ap.add_argument("--root", help="repo root (default: git toplevel of the current directory)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("probe")
     sub.add_parser("check")
     sub.add_parser("mark").add_argument("--force", action="store_true")
     args = ap.parse_args(argv)
-    root = Path(args.root).resolve()
     if args.cmd == "probe":
         print(json.dumps(probe(), indent=2))
         return 0
-    if args.cmd == "check":
-        result = check(root)
-        print(json.dumps(result, indent=2))
-        return 0 if result["ok"] else 1
-    return mark(root, args.force)
+    try:
+        root = _resolve_root(args.root)
+        if args.cmd == "check":
+            result = check(root)
+            print(json.dumps(result, indent=2))
+            return 0 if result["ok"] else 1
+        return mark(root, args.force)
+    except (OnboardError, ValueError, OSError, subprocess.SubprocessError) as e:
+        sys.stderr.write("onboard: %s\n" % e)
+        return 3
 
 
 if __name__ == "__main__":
