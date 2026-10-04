@@ -60,6 +60,16 @@ class Base(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.root = make_repo(self.tmp)
 
+    def project_dir(self, path):
+        """Set (or, with None, unset) CLAUDE_PROJECT_DIR for this test only; the original value is restored."""
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        if path is None:
+            os.environ.pop("CLAUDE_PROJECT_DIR", None)
+        else:
+            os.environ["CLAUDE_PROJECT_DIR"] = str(path)
+
 
 class OnboardedIsNoOp(Base):
     def test_every_event_and_tool_is_silent(self):
@@ -79,8 +89,7 @@ class OnboardedIsNoOp(Base):
 
     def test_malformed_stdin_is_silent_when_onboarded(self):
         mark(self.root)
-        os.environ["CLAUDE_PROJECT_DIR"] = str(self.root)
-        self.addCleanup(os.environ.pop, "CLAUDE_PROJECT_DIR", None)
+        self.project_dir(self.root)
         self.assertEqual(run("not json", "PreToolUse"), (0, "", ""))
 
     def test_marker_shared_with_worktree(self):
@@ -270,8 +279,7 @@ class AdopterSetup(Base):
 
 class FailureSemantics(Base):
     def test_malformed_json_fallback_event(self):
-        os.environ["CLAUDE_PROJECT_DIR"] = str(self.root)
-        self.addCleanup(os.environ.pop, "CLAUDE_PROJECT_DIR", None)
+        self.project_dir(self.root)
         self.assertEqual(decision(run("{nope", "PreToolUse")), "deny")
         self.assertEqual(decision(run("", "PreToolUse")), "deny")
         self.assertEqual(decision(run("[]", "PreToolUse")), "deny")
@@ -296,6 +304,14 @@ class FailureSemantics(Base):
         self.addCleanup(setattr, gate, "decide", orig)
         self.assertEqual(decision(run(pre(self.root, "Read", {}))), "deny")
         self.assertEqual(run({"hook_event_name": "SessionStart", "cwd": str(self.root)}), (0, "", ""))
+
+
+class EnvHygiene(unittest.TestCase):
+    def test_tests_restore_a_preexisting_project_dir(self):
+        with mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/sentinel"}):
+            suite = unittest.defaultTestLoader.loadTestsFromTestCase(FailureSemantics)
+            unittest.TextTestRunner(stream=open(os.devnull, "w")).run(suite)
+            self.assertEqual(os.environ.get("CLAUDE_PROJECT_DIR"), "/sentinel")
 
 
 class GitTimeout(Base):
@@ -401,9 +417,7 @@ class WrapperTests(Base):
         self.assertEqual(self.sh("UserPromptExpansion", {}, python=missing), (0, "", ""))
 
     def test_malformed_stdin_through_wrapper(self):
-        env_root = {"CLAUDE_PROJECT_DIR": str(self.root)}
-        os.environ.update(env_root)
-        self.addCleanup(os.environ.pop, "CLAUDE_PROJECT_DIR", None)
+        self.project_dir(self.root)
         code, out, _ = self.sh("PreToolUse", "garbage")
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "deny")
