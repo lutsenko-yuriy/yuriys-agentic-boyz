@@ -1,5 +1,8 @@
+import json
 import re
+import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -133,7 +136,7 @@ class ConfigAgreementTest(unittest.TestCase):
     def test_project_keys_are_known_and_required_ones_covered(self):
         keys = (block("project-keys", SKILL.read_text(encoding="utf-8")) or "").split()
         self.assertTrue(keys)
-        self.assertEqual(set(), set(keys) - onboard.PROJECT_KEYS)
+        self.assertEqual(onboard.PROJECT_KEYS, set(keys))
         for field in onboard.REQUIRED_PROJECT_FIELDS:
             self.assertIn(field, keys)
 
@@ -160,10 +163,159 @@ class ConfigAgreementTest(unittest.TestCase):
         for name in sorted(manual & present):
             self.assertIn("`%s`" % name, text)  # the bare backticked name, not e.g. CODE_STYLE.md
 
+    def test_every_key_needs_a_concrete_value(self):
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertRegex(text, r"never leave a key empty")
+        self.assertIn("`none`", text)
+        self.assertNotRegex(text, r"(?i)leave a key empty if")
+
+    def test_calibrate_step_forbids_shell_and_fetching(self):
+        step = SKILL.read_text(encoding="utf-8").split("### 7.")[1].split("### 8.")[0]
+        self.assertRegex(step, r"(?i)do not run any shell")
+        self.assertRegex(step, r"(?i)ask the user for the model ids")
+
     def test_calibrate_reused_by_reference(self):
         text = SKILL.read_text(encoding="utf-8")
         self.assertIn("skills/configure/calibrate/SKILL.md", text)
         self.assertTrue(CALIBRATE.is_file())
+
+
+class NoStrayWriteVerbsTest(unittest.TestCase):
+    VERB_RE = re.compile(r"\b(edit|write|create|modify|append|update|change)\s+(?!`)", re.IGNORECASE)
+
+    def test_write_verbs_are_followed_by_a_listed_path(self):
+        offenders = []
+        for p in skill_files():
+            for ln in p.read_text(encoding="utf-8").splitlines():
+                if self.VERB_RE.search(ln) and not ln.lstrip().startswith("description:"):
+                    offenders.append("%s: %s" % (p.name, ln.strip()[:100]))
+        self.assertEqual([], offenders)
+
+
+def make_clone(parent, origin=None, sentinel=False):
+    """A scratch git repo holding this working tree's tracked files (README/setup.sh are out of scope here)."""
+    dest = Path(parent) / "clone"
+    dest.mkdir()
+    out = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True, text=True, check=True).stdout
+    for rel in (f for f in out.split("\0") if f):
+        src = ROOT / rel
+        if src.is_file() and not src.is_symlink():
+            (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest / rel)
+    subprocess.run(["git", "-C", str(dest), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(dest), "add", "-A"], check=True)  # apply and check only see tracked files
+    if origin:
+        subprocess.run(["git", "-C", str(dest), "remote", "add", "origin", origin], check=True)
+    if sentinel:
+        (dest / ".yab-template").write_text("repo=%s\n" % onboard.YAB_REPO)
+    return dest.resolve()
+
+
+def has_tomllib():
+    try:
+        import tomllib  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def write_config(root, empty=()):
+    project = {k: "none" for k in onboard.PROJECT_KEYS if k != "keep_licence"}
+    project.update(name="Demo", description="A demo", issue_prefix="DEM", architecture_summary="Layered")
+    for key in empty:
+        project[key] = ""
+    lines = ['[providers]', 'pm = "github"', 'vcs = "github"', "", "[project]"]
+    lines += ['%s = %s' % (k, json.dumps(v)) for k, v in sorted(project.items())]
+    (root / "skill_router.toml").write_text("\n".join(lines) + "\n")
+
+
+def stranded(root):
+    """Placeholders left after apply in files the skill may not write."""
+    writes = set(declared_writes(SKILL.read_text(encoding="utf-8")))
+    left = {}
+    for rel in onboard._tracked_files(root):
+        if rel in ("README.md", "setup.sh") or not onboard._scanned(rel) or not (root / rel).is_file():
+            continue
+        found = onboard.PLACEHOLDER_RE.findall((root / rel).read_text(encoding="utf-8"))
+        if found and rel not in writes:
+            left[rel] = found
+    return left
+
+
+@unittest.skipUnless(has_tomllib(), "needs Python 3.11+")
+class ApplyEndToEndTest(unittest.TestCase):
+    def test_concrete_values_leave_no_placeholder_outside_the_writes_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_clone(tmp)
+            write_config(root)
+            onboard.apply(root)
+            self.assertEqual({}, stranded(root))
+
+    def test_an_empty_value_would_strand_onboarding(self):
+        # Why the skill demands `none`: this placeholder lives in a file the gate will not let the agent edit.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_clone(tmp)
+            write_config(root, empty=["experiment_tool"])
+            onboard.apply(root)
+            self.assertIn("docs/experiments/README.md", stranded(root))
+
+
+@unittest.skipUnless(has_tomllib(), "needs Python 3.11+")
+class TemplateFlowTest(unittest.TestCase):
+    """State table: sentinel x origin x answer.
+
+    no sentinel                 -> ordinary flow (setup-incomplete or configured)
+    sentinel, origin YAB, (a)   -> template_mode; agent runs plain `mark` (check is ok in template mode)
+    sentinel, origin YAB, (b)   -> template_mode; apply refuses; human repoints origin, then as the next row
+    sentinel, origin not YAB    -> template_mode false + sentinel error; ordinary flow; apply deletes the sentinel
+    (fork maintenance: the human runs `mark --force`, the one case where check stays not ok)
+    """
+
+    YAB_URL = "https://github.com/%s.git" % onboard.YAB_REPO
+
+    def test_yab_origin_is_template_mode_and_plain_mark_works(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_clone(tmp, self.YAB_URL, sentinel=True)
+            result = onboard.check(root)
+            self.assertTrue(result["template_mode"])
+            self.assertTrue(result["ok"], result["errors"])
+            self.assertEqual(0, onboard.mark(root, force=False))
+
+    def test_yab_origin_refuses_apply(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_clone(tmp, self.YAB_URL, sentinel=True)
+            write_config(root)
+            with self.assertRaises(onboard.Refused):
+                onboard.apply(root)
+
+    def test_after_repointing_origin_the_flow_continues_and_apply_removes_the_sentinel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_clone(tmp, self.YAB_URL, sentinel=True)
+            subprocess.run(["git", "-C", str(root), "remote", "set-url", "origin", "https://github.com/me/proj.git"], check=True)
+            result = onboard.check(root)
+            self.assertFalse(result["template_mode"])
+            self.assertTrue(any(".yab-template present" in e for e in result["errors"]))
+            write_config(root)
+            self.assertTrue(onboard.apply(root)["sentinel_deleted"])
+            self.assertFalse((root / ".yab-template").exists())
+            self.assertFalse(any(".yab-template" in e for e in onboard.check(root)["errors"]))
+
+    def test_origin_not_yab_never_asks_the_template_question(self):
+        text = SKILL.read_text(encoding="utf-8")
+        self.assertIn("`template_mode` is true", text)
+        self.assertIn(".yab-template present", text)
+
+    def test_human_only_commands_are_marked_and_limited(self):
+        text = text_of(skill_files())
+        human = [c for c in re.findall(r"`(! [^`]+)`", text)]
+        self.assertTrue(any("git remote set-url origin" in c for c in human))
+        self.assertTrue(any("onboard.py mark --force" in c for c in human))
+        for c in human:
+            self.assertTrue("set-url origin" in c or "mark --force" in c, c)
+        # Outside those `! ` commands the agent must never be told to run set-url or --force.
+        stripped = re.sub(r"`! [^`]+`", "", text)
+        self.assertNotIn("set-url", stripped)
+        self.assertNotIn("--force", stripped)
 
 
 class RegistrationTest(unittest.TestCase):

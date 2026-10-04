@@ -29,12 +29,12 @@ Only these files. Everything else is filled by `onboard.py apply`.
 
 ## Commands
 
-Only these commands are allowed while gated. Use exactly this form: no flags, no `--root`, no `--force` (that one needs a human terminal).
+Only these commands are allowed while gated. Use exactly this form, with no flags. The human-only commands are in step 2.
 
-`probe` works on any Python 3. `check`, `apply` and `mark` need Python 3.11+: use an interpreter named in the probe's `pythons_with_tomllib`, e.g. `python3.12`, or its absolute path if `CLAUDE.local.md` gives one.
+`probe` works on any Python 3. `check`, `apply` and `mark` need Python 3.11+: use an interpreter named in the probe's `pythons_with_tomllib` (a versioned name such as `python3.12`, or plain `python3`), or the absolute path `CLAUDE.local.md` gives. Below, `python3.12` stands for that interpreter.
 
 ```bash
-python3.12 scripts/onboard/onboard.py probe
+python3 scripts/onboard/onboard.py probe
 python3.12 scripts/onboard/onboard.py check
 python3.12 scripts/onboard/onboard.py apply
 python3.12 scripts/onboard/onboard.py mark
@@ -44,17 +44,22 @@ Read-only inspection (`ls`, `cat`, `git log`, `git ls-files`, `grep`) is fine. `
 
 ## Steps
 
-### 1. Detect the mode
+### 1. Probe the machine
 
-Run `check` (exit 1 is normal here; read its JSON).
+Run `probe` with plain `python3`. Note `pythons_with_tomllib` (if empty, stop and ask the user to install Python 3.11+), which toolchains exist, `gh_authenticated`, `ollama_models`, and which `env_vars_set` names exist (names only; never ask the user to paste a secret).
 
-- `template_mode` is true: ask "(a) maintaining YAB itself, or (b) a fresh project created from the template?". For (a) give the orientation (step 9), run `mark`, and stop. For (b) continue.
-- `errors` is empty and `placeholders` is empty: the project is already configured. Give the orientation (step 9), run `mark`, and stop. Skip the rest.
-- Otherwise: continue with step 2.
+### 2. Detect the mode
 
-### 2. Probe the machine
+Run `check` (exit 1 is normal here; read its JSON). State table:
 
-Run `probe`. Note the `pythons_with_tomllib`, which toolchains exist, `gh_authenticated`, `ollama_models`, and which `env_vars_set` names exist (names only; never ask the user to paste a secret).
+| `.yab-template` | origin | Answer | `check` says | Do |
+|---|---|---|---|---|
+| absent | any | | no sentinel error | Configured (no errors, no placeholders): orientation (step 9), `mark`, stop. Otherwise step 3. |
+| present | YAB | maintaining YAB | `template_mode` true, `ok` true | Orientation (step 9), then `mark` (it works in template mode); stop. |
+| present | YAB | new project from the template | `template_mode` true | Ask the user to run `! git remote set-url origin <their repo URL>` themselves (the gate blocks it for you; `!` runs as the user). Re-run `check`: `template_mode` is now false with the sentinel error below. Continue at step 3; `apply` removes the sentinel. |
+| present | not YAB, or none | | `template_mode` false, error ".yab-template present but origin is not ..." | Treat as an adopter: continue at step 3; `apply` removes the sentinel. If the user says this is a YAB fork for maintenance, ask them to run `! python3.12 scripts/onboard/onboard.py mark --force` in their own terminal (it needs an interactive terminal) and stop. |
+
+When `template_mode` is true, ask: "(a) maintaining YAB itself, or (b) a fresh project created from the template?". Never run `git remote`, delete `.yab-template` or force the marker yourself.
 
 ### 3. Collect project config
 
@@ -69,13 +74,13 @@ experiment_tool available_models ai_commit_trailer ai_tool_credit test_command i
 test_harness_file test_harness_class version_file version_field in_qa_paths keep_licence
 -->
 
-Rules: `project_id` is required when `pm` is `"linear"`; `available_models` is a comma-separated list and is what step 7 maps; leave a key empty if it truly does not apply, but never leave `name`, `description` or `issue_prefix` empty; `keep_licence = false` makes `apply` delete `LICENSE`; every value is a single line.
+Rules: every key gets a concrete single-line value; never leave a key empty. Where a key does not apply, enter the literal `none`. An empty value keeps its placeholder, and some placeholders sit in files outside the list above (experiments, backlog, implement and review skills), so `check` could then never go clean. `project_id` is a real id when `pm` is `"linear"` (`none` for `"github"`); `available_models` is a comma-separated list and is what step 7 maps; `keep_licence` is `true` or `false` and `false` makes `apply` delete `LICENSE`.
 
 ### 4. Apply
 
 Run `apply`. It substitutes the `[project]` values everywhere, reconciles `.mcp.json` with `pm` and removes the template sentinel. Report its `changed`, `unresolved` and `warnings`. Re-running is safe.
 
-Some placeholders `apply` never fills. Handle them by hand: `CODE_STYLE` in `AGENTS.md` is replaced in step 6. Any other name reported under `unresolved`: Edit the file named there, or stop and ask.
+`apply` fills every placeholder that has a `[project]` key. The one placeholder it never fills is `CODE_STYLE` in `AGENTS.md`, which step 6 replaces. If `unresolved` lists anything else, correct the value in `skill_router.toml` and re-run `apply`; values for `skills/shared/project-config.md` (test, version, QA fields) come from there too, so that file needs no hand edit.
 
 ### 5. Fill the three artifacts
 
@@ -87,14 +92,14 @@ Follow `@skills/configure/onboard/resources/artifact-guide.md` for inference and
 
 When writing: remove the `<!-- yab:template -->` marker line, every `<...>` token and the template's guidance comments. Every language in the TECH_STACK Languages table needs a Base standard entry in CODE_STYLE, with the language spelled identically (exact, case-sensitive). If no enforcer is configured for a language, say so instead of inventing one.
 
-### 6. Update the architecture and agent docs
+### 6. Architecture and agent docs
 
 - Edit `docs/ARCHITECTURE.md`: replace the guidance comments with the real directory tree, layers and dependencies, taken from the repo. Keep it short and factual.
 - Edit `AGENTS.md`: fill the Common Commands (`<test command>`, `<lint command>`, `<build command>`, `<install command>`) from TECH_STACK's Tooling section, and replace the `CODE_STYLE` placeholder line under "Code style" with a one-line summary of the Base standard.
 
 ### 7. Model tiers
 
-`/calibrate` is blocked while gated, so do its work here. Read `skills/configure/calibrate/SKILL.md` and execute its steps 1 to 5 inline against `available_models`: skip 5a (command stubs live outside the writable list) and 6. Edit `docs/MODEL_TIERS.md` only. Tell the user to run `/calibrate` later if they want the command stubs re-routed to the chosen models.
+`/calibrate` is blocked while gated, so do its work here. Read `skills/configure/calibrate/SKILL.md` and execute its steps 1 to 5 inline against `available_models`: skip 5a (command stubs live outside the writable list) and 6. Edit `docs/MODEL_TIERS.md` only. Do not run any shell command or fetch anything from calibrate (its LM Studio model-id lookup is denied while gated): ask the user for the model ids. Tell the user to run `/calibrate` later if they want the command stubs re-routed to the chosen models.
 
 ### 8. Per-machine settings (optional)
 
@@ -102,6 +107,6 @@ If the probe found tools the user will need (an interpreter path, a Flutter bina
 
 ### 9. Check, mark, orient
 
-Run `check`. If `ok` is false, fix every error it lists (and re-run `apply` if the config changed) until it is clean; surface warnings. Then run `mark`: it refuses unless `check` is clean, and `--force` is not available to you.
+Run `check`. If `ok` is false, fix every error it lists (and re-run `apply` if the config changed) until it is clean; surface warnings. Then run `mark`: it refuses unless `check` is clean, and forcing the marker is for the human only.
 
 Then give the one-screen orientation per `@skills/configure/onboard/resources/orientation.md`, offer one optional Q&A turn, and hand off: the next step is the `summarize` skill (`/summarize`). In the already-configured path of step 1 the orientation is all there is.

@@ -22,7 +22,7 @@ List every language that has source in the repo, including tooling languages suc
 
 ## Style guides and enforcers
 
-Name the published guide for each language with a link. List an enforcer (formatter, linter) only when its config or CI step exists in the repo; otherwise write "no enforcer configured".
+Name the published guide for each language with a link. List an enforcer (formatter, linter) only when its config or CI step exists in the repo; otherwise state "no enforcer configured".
 
 | Language | Style guide | Enforcer, only if configured |
 |---|---|---|
@@ -36,6 +36,6 @@ Name the published guide for each language with a link. List an enforcer (format
 ## Filling the files
 
 - `docs/TECH_STACK.md`: keep the section and table shapes of the template. The first column of the Languages table is the language name alone (`Dart`, not `Dart 3`); put the version in the second column.
-- `docs/CODE_STYLE.md`: under `## Base standard` write one line per TECH_STACK language, starting with the exact language name, then the guide link. Fill Formatting, Linting, Naming and structure, Comments from the repo's configs and conventions; delete a section only by replacing its placeholder with a real statement or "none".
+- `docs/CODE_STYLE.md`: under `## Base standard` put one line per TECH_STACK language, starting with the exact language name, then the guide link. Fill Formatting, Linting, Naming and structure, Comments from the repo's configs and conventions; delete a section only by replacing its placeholder with a real statement or "none".
 - `docs/CONSTRAINTS.md`: ask the user for team and capacity, stage, environment, budget and compliance. Record answers as given; "none known" is a valid answer.
 - In all three: delete the `<!-- yab:template -->` line, every `<...>` token and the guidance comments. `check` rejects what is left over.
