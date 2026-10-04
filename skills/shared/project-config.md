@@ -6,11 +6,7 @@ Project identity (name, issue prefix, git host, PM tool, test/version settings) 
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Framework | `{{FRAMEWORK}}` |
-| State management | `{{STATE_MANAGEMENT}}` |
-| Local persistence | `{{PERSISTENCE}}` |
+Languages, frameworks, platforms and tooling: `docs/TECH_STACK.md`.
 
 ## Project management
 

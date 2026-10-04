@@ -80,6 +80,29 @@ class ProbeTests(unittest.TestCase):
             data = onboard.probe(run_tools=False)
         self.assertEqual(data["pythons_with_tomllib"], ["python3.12"])
 
+    def test_bare_python3_listed_when_it_has_tomllib(self):
+        calls = []
+
+        def fake(cmd):
+            calls.append(cmd)
+            return mock.Mock(returncode=0 if cmd[0] == "python3" else 1, stdout="")
+
+        with mock.patch("shutil.which", side_effect=lambda n: "/bin/" + n if n in ("python3", "python3.12") else None), \
+                mock.patch.object(onboard, "_tool", side_effect=fake):
+            data = onboard.probe()
+        self.assertEqual(data["pythons_with_tomllib"], ["python3.12", "python3"])
+        self.assertIn(["python3", "-c", "import tomllib"], calls)
+
+    def test_bare_python3_without_tomllib_not_listed(self):
+        with mock.patch("shutil.which", side_effect=lambda n: "/bin/" + n if n == "python3" else None), \
+                mock.patch.object(onboard, "_tool", return_value=mock.Mock(returncode=1, stdout="")):
+            self.assertEqual(onboard.probe()["pythons_with_tomllib"], [])
+
+    def test_bare_python3_not_executed_without_run_tools(self):
+        with mock.patch("shutil.which", side_effect=lambda n: "/bin/" + n if n == "python3" else None), \
+                mock.patch("subprocess.run", side_effect=AssertionError("must not execute")):
+            self.assertEqual(onboard.probe(run_tools=False)["pythons_with_tomllib"], [])
+
 
 class LoadTomlTests(unittest.TestCase):
     def test_missing_tomllib_fails_loudly_exit_2(self):
@@ -210,6 +233,16 @@ class CheckTests(unittest.TestCase):
         self.assertIn("move a legacy [linear].project_id there", self.msgs(self.check({"skill_router.toml": legacy})))
         r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"\n', "").replace('"linear"', '"github"')})
         self.assertNotIn("project.project_id", self.msgs(r))
+
+    def test_linear_rejects_none_as_project_id_any_case(self):
+        for value in ("none", "None", " NONE ", "none (no project)", "None - tbd"):
+            r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"', 'project_id = "%s"' % value)})
+            self.assertIn("project.project_id must be a real id", self.msgs(r), value)
+        for real in ("nonesuch-a1b2", "Nonetheless"):
+            r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"', 'project_id = "%s"' % real)})
+            self.assertNotIn("project.project_id", self.msgs(r), real)
+        gh = GOOD_TOML.replace('project_id = "p1"', 'project_id = "none"').replace('"linear"', '"github"')
+        self.assertNotIn("project.project_id", self.msgs(self.check({"skill_router.toml": gh})))
 
     def test_invalid_prefix(self):
         for bad in ["N/A", "NA", "A B", ""]:

@@ -31,7 +31,8 @@ Full product specifications: docs/PRODUCT_SPEC.md
 | docs/workflows/POSTMORTEM.md | Post-fix root-cause investigation workflow — reconstructing when/why a shipped bug was introduced, after `TROUBLESHOOT.md` produced the fix |
 | docs/workflows/MULTI_WU.md | Multi-WU ticket appendix to `FEATURE.md` — WU-splitting guidelines, pre-implementation WU types, branch/PR-per-WU rules, WU cycle |
 | CLAUDE.local.md | Local machine settings (binary paths, MCP auth, model tier mappings) — not committed |
-| skills/configure/calibrate/SKILL.md | One-time setup: propose and approve the model → tier mapping |
+| skills/configure/onboard/SKILL.md | First-session onboarding: project config, tech stack, code style and constraints, first model mapping, then the onboarded marker; orientation for later clones |
+| skills/configure/calibrate/SKILL.md | Re-map models to tiers when the available models change (the first mapping happens in `/onboard`) |
 | skills/configure/migrate-provider/SKILL.md | Switch a tool role (pm, vcs) to a different provider without changing skill files |
 | skills/configure/skill-creator/SKILL.md | Two-mode skill: create a new skill (guided wizard) or refactor an existing one into lean SKILL.md + resources |
 | skills/configure/style/SKILL.md | Switch communication style: DETAILED, CONCISE, or SCHEMATIC |

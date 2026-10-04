@@ -3,7 +3,7 @@ name: calibrate
 effort: THOROUGH
 reasoning: ARCHITECTURAL
 output_style: DETAILED
-description: One-time project setup skill. Reads the available models listed in docs/MODEL_TIERS.md, proposes an optimal mapping from every Effort Tier + Reasoning Depth combination to a specific model, waits for user approval or adjustments, then writes the agreed mapping into docs/MODEL_TIERS.md. Invoke once after setup.sh, before the first working session. This skill itself requires THOROUGH + ARCHITECTURAL capability to reason about model strengths.
+description: One-time project setup skill. Reads the available models listed in docs/MODEL_TIERS.md, proposes an optimal mapping from every Effort Tier + Reasoning Depth combination to a specific model, waits for user approval or adjustments, then writes the agreed mapping into docs/MODEL_TIERS.md. Invoke after `/onboard` (which performs a first calibration inline) whenever the available models change, before the first working session. This skill itself requires THOROUGH + ARCHITECTURAL capability to reason about model strengths.
 ---
 
 This skill requires **THOROUGH + ARCHITECTURAL** capability — use the most capable model available when invoking it. The mapping you produce governs every other skill in this project, so the reasoning must be exhaustive and well-justified.

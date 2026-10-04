@@ -31,6 +31,7 @@ This project describes what each skill needs from a model using two axes: **Effo
 | Skill | Effort | Reasoning | Why |
 |---|---|---|---|
 | `calibrate` | THOROUGH | ARCHITECTURAL | Reasoning about model strengths requires the most capable model available |
+| `onboard` | FOCUSED | ARCHITECTURAL | Infers the stack across the repo and fixes project conventions; runs inline in the session |
 | `style` | RAPID | MECHANICAL | Load and apply a communication style definition |
 
 ### Product skills — operate on the codebase and product
@@ -50,7 +51,7 @@ This project describes what each skill needs from a model using two axes: **Effo
 
 ## Available models
 
-Models available to this project (set during `setup.sh`):
+Models available to this project (set during `/onboard`):
 
 | Model | Access |
 |---|---|
