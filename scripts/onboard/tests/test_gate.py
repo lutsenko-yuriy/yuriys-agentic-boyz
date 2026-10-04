@@ -158,7 +158,7 @@ class PreToolUseTools(Base):
             self.assertIsNone(decision(run(pre(self.root, "mcp__x__y".replace("x__y", ok[5:]), {}))), ok)
         for bad in ("mcp__linear__save_issue", "mcp__linear__create_attachment", "mcp__linear__delete_comment",
                     "mcp__linear__update_diff", "mcp__linear__merge_diff", "mcp__linear__getissue",
-                    "mcp__linear", "mcp__get_issue", "mcp__linear__list_x__save_y", "mcp__"):
+                    "mcp__linear", "mcp__get_issue", "mcp__linear__list_x__save_y", "mcp__s__x__get_y", "mcp__s__get_x__save_y", "mcp__"):
             self.assertEqual(decision(run(pre(self.root, bad, {}))), "deny", bad)
 
     def test_read_only_builtins_pass_and_unknown_tools_denied(self):

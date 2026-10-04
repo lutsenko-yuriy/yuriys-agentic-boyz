@@ -21,6 +21,9 @@ A hang also fails OPEN (Claude Code lets the call through when a hook times out)
 under a 3 s watchdog (YAB_GATE_DEADLINE) and the gate's git calls time out after 2 s; the hook `timeout` is only a
 backstop and must stay above 3.
 
+Known residual: the MCP rule trusts tool *names* (a `get_or_create_*` tool would pass; the payload carries no
+readOnlyHint). Mitigated because the agent cannot add MCP servers while gated.
+
 Intended wiring (WU7, not wired yet; each row `"timeout": 5`):
     SessionStart (matcher startup)  scripts/onboard/gate.sh SessionStart
     UserPromptExpansion             scripts/onboard/gate.sh UserPromptExpansion
@@ -132,8 +135,8 @@ def _pre_tool_use(data: Dict[str, Any], root: Path) -> Result:
         allowed, reason = bash_policy.is_allowed(command)
         return OK if allowed else _deny("Bash: %s" % reason)
     if name.startswith("mcp__"):
-        parts = name.split("__")
-        if len(parts) >= 3 and parts[-1].startswith(MCP_READ_PREFIXES):
+        parts = name.split("__", 2)  # mcp__<server>__<tool>; a tool name that itself contains "__" is ambiguous: deny
+        if len(parts) == 3 and "__" not in parts[2] and parts[2].startswith(MCP_READ_PREFIXES):
             return OK
         return _deny("MCP tool %s is not read-only" % name)
     if name in PASS_TOOLS:
