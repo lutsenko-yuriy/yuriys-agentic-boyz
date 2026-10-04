@@ -166,5 +166,15 @@ class ConfigAgreementTest(unittest.TestCase):
         self.assertTrue(CALIBRATE.is_file())
 
 
+class RegistrationTest(unittest.TestCase):
+    def test_agents_md_lists_onboard_and_scopes_calibrate(self):
+        rows = [ln for ln in (ROOT / "AGENTS.md").read_text(encoding="utf-8").splitlines() if ln.startswith("| skills/")]
+        onboard_row = [ln for ln in rows if "skills/configure/onboard/SKILL.md" in ln]
+        self.assertEqual(1, len(onboard_row))
+        calibrate_row = next(ln for ln in rows if "skills/configure/calibrate/SKILL.md" in ln)
+        self.assertIn("re-map", calibrate_row.lower())
+        self.assertIn("/onboard", calibrate_row)
+
+
 if __name__ == "__main__":
     unittest.main()
