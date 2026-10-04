@@ -5,7 +5,16 @@ Fails closed: any parse error, unknown command, or unrecognised flag denies.
 
 Deliberately over-strict: `$`, backticks, newlines and control characters are denied even inside quotes, and a
 quoted operator-only token (e.g. `'|'`, `';'`) is indistinguishable from the operator after tokenising, so it is
-treated as one (a quoted `'|'` splits the pipeline and usually fails on the empty or unknown segment).
+treated as one (a quoted `'|'` splits the pipeline and usually fails on the empty or unknown segment). Braces are
+denied for the same reason (bash brace expansion), which also rejects quoted jq object literals.
+
+Flag checks follow getopt: a short cluster (`-ro`) is denied if any letter is denied, even one that is really another
+flag's value, and a long option is denied if it is an abbreviation (`--out`) of a denied one. Arguments after `--`
+are operands.
+
+Known residuals (repo config, not command line): `diff.external`, textconv filters and `core.fsmonitor` in the target
+repo's config can run programs on `git diff`/`log`/`status`. Unquoted globs still expand, so a file named like a flag
+could inject one; nothing can create such a file while gated.
 """
 
 import re
@@ -16,7 +25,7 @@ Result = Tuple[bool, str]
 
 OK = (True, "ok")
 OPERATOR_CHARS = frozenset("();<>|&")
-FORBIDDEN_CHARS = ("$", "`", "\n", "\r", "\0")
+FORBIDDEN_CHARS = ("$", "`", "{", "}", "\n", "\r", "\0")
 ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 PYTHON_RE = re.compile(r"^python3(\.\d+)?$")
 ONBOARD_SCRIPTS = ("scripts/onboard/onboard.py", "./scripts/onboard/onboard.py")
@@ -27,14 +36,17 @@ INSPECTION_COMMANDS = (
     "type date uname find sort uniq"
 ).split()
 
-# Write/exec-capable flags found by reading each allowed command's man page (rg: --pre/--hostname-bin run programs;
-# sort: -o writes, --compress-program execs; date: -s sets the clock; tree: -o writes; file: -C writes a magic.mgc).
+# Write/exec-capable flags per command, as (short letters, long names). From each man page: sort -o writes and
+# --compress-program execs; rg --pre/--hostname-bin run programs; date -s sets the clock; tree -o writes and -R
+# writes 00Tree.html per directory; file -C writes magic.mgc.
 FIND_DENIED = frozenset("-exec -execdir -ok -okdir -delete -fprint -fprint0 -fprintf -fls".split())
-SORT_DENIED_LONG = ("--output", "--compress-program")
-RG_DENIED_LONG = ("--pre", "--hostname-bin")
-DATE_DENIED = frozenset({"-s", "--set"})
-TREE_DENIED = frozenset({"-o"})
-FILE_DENIED = frozenset({"-C", "--compile"})
+FLAG_RULES = {
+    "sort": (frozenset("o"), ("--output", "--compress-program")),
+    "rg": (frozenset(), ("--pre", "--hostname-bin")),
+    "date": (frozenset("s"), ("--set",)),
+    "tree": (frozenset("oR"), ()),
+    "file": (frozenset("C"), ("--compile",)),
+}
 
 GIT_READ_SUBCOMMANDS = frozenset(
     "status log show diff rev-parse ls-files ls-tree describe blame shortlog".split()
@@ -50,7 +62,7 @@ GIT_TAG_FLAGS = frozenset({"-l", "--list", "-n"})
 
 GH_COMMANDS = frozenset({("auth", "status"), ("repo", "view"), ("issue", "list"), ("issue", "view")})
 # --web opens a browser (not read-only/non-interactive); --show-token prints the credential.
-GH_DENIED = frozenset({"--web", "-w", "--show-token", "-t"})
+GH_DENIED = (frozenset("wt"), ("--web", "--show-token"))
 
 
 def is_allowed(command: str) -> Result:
@@ -110,38 +122,37 @@ def _long_name(arg: str) -> str:
 
 def _check_inspection(name: str, args: List[str]) -> Result:
     if name == "find":
-        bad = [a for a in args if a in FIND_DENIED]
-    elif name == "sort":
-        bad = [a for a in args if (a.startswith("-o") and not a.startswith("--")) or _long_name(a) in SORT_DENIED_LONG]
-    elif name == "rg":
-        bad = [a for a in args if _long_name(a) in RG_DENIED_LONG]
-    elif name == "date":
-        bad = [a for a in args if _long_name(a) in DATE_DENIED or (a.startswith("-s") and not a.startswith("--"))]
-    elif name == "tree":
-        bad = [a for a in args if a in TREE_DENIED or (a.startswith("-o") and not a.startswith("--"))]
-    elif name == "file":
-        bad = [a for a in args if a in FILE_DENIED]
+        bad = next((a for a in args if a in FIND_DENIED), "")
     elif name == "uniq":
-        paths = [a for a in args if not a.startswith("-")]
-        bad = args if len(paths) > 1 else []
+        bad = args[0] if len(_operands(args)) > 1 else ""
+    elif name in FLAG_RULES:
+        bad = _denied_flag(args, *FLAG_RULES[name])
     else:
-        bad = []
+        bad = ""
     if bad:
-        return False, "%s: denied flag/argument %r" % (name, bad[0])
+        return False, "%s: denied flag/argument %r" % (name, bad)
     return OK
 
 
-def _flag_denied_long(args: List[str], denied: Tuple[str, ...]) -> str:
-    """Return the first arg naming a denied long option, including unambiguous abbreviations (git parse-options)."""
+def _operands(args: List[str]) -> List[str]:
+    """Non-option arguments: a lone `-` (stdin) and everything after `--` count."""
+    if "--" in args:
+        i = args.index("--")
+        return [a for a in args[:i] if a == "-" or not a.startswith("-")] + args[i + 1:]
+    return [a for a in args if a == "-" or not a.startswith("-")]
+
+
+def _denied_flag(args: List[str], short: frozenset, long_names: Tuple[str, ...]) -> str:
+    """Return the first arg that is, contains (short cluster) or abbreviates (long) a denied flag; stop at `--`."""
     for arg in args:
         if arg == "--":
             break
-        if not arg.startswith("--"):
-            continue
-        name = _long_name(arg)
-        for full in denied:
-            if name.startswith(full) or (len(name) >= 4 and full.startswith(name)):
+        if arg.startswith("--"):
+            name = _long_name(arg)
+            if any(name.startswith(full) or (len(name) >= 3 and full.startswith(name)) for full in long_names):
                 return arg
+        elif arg.startswith("-") and short & set(arg[1:]):
+            return arg
     return ""
 
 
@@ -157,7 +168,7 @@ def _check_git(args: List[str]) -> Result:
     if i >= len(args):
         return False, "git: no subcommand"
     sub, rest = args[i], args[i + 1:]
-    bad = _flag_denied_long(rest, GIT_DENIED_LONG)
+    bad = _denied_flag(rest, frozenset(), GIT_DENIED_LONG)
     if bad:
         return False, "git: %r writes files or runs configured programs" % bad
     if sub in GIT_READ_SUBCOMMANDS:
@@ -193,9 +204,9 @@ def _check_git(args: List[str]) -> Result:
 def _check_gh(args: List[str]) -> Result:
     if len(args) < 2 or (args[0], args[1]) not in GH_COMMANDS:
         return False, "gh: only auth status, repo view, issue list/view allowed"
-    for arg in args[2:]:
-        if _long_name(arg) in GH_DENIED:
-            return False, "gh: flag %r not allowed" % arg
+    bad = _denied_flag(args[2:], *GH_DENIED)
+    if bad:
+        return False, "gh: flag %r not allowed" % bad
     return OK
 
 
