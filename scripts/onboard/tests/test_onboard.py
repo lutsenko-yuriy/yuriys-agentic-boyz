@@ -609,7 +609,7 @@ class ShippedTemplateTests(unittest.TestCase):
         tech = filled("docs/TECH_STACK.md").replace(
             "| <language> | <version> | <e.g. application code, scripts> |", "| Rust | 1.80 | services |"
         )
-        style = filled("docs/CODE_STYLE.md").replace("<language>: <style guide link>", "Rust: <!-- Rust Style Guide -->")
+        style = filled("docs/CODE_STYLE.md").replace("<language>: <style guide link>", "<!-- Rust Style Guide -->")
         r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
         self.assertIn("CODE_STYLE Base standard does not cover TECH_STACK language Rust", r["errors"])
 
