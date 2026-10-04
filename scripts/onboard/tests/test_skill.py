@@ -56,7 +56,7 @@ def agent_text(text):
 
 
 def bash_lines(text):
-    text = agent_text(text)
+    text = agent_text(text).replace("<git-common-dir>", ".git")  # stands for the output of the previous command
     lines = []
     for body in BASH_FENCE_RE.findall(text):
         lines += [ln.strip() for ln in body.splitlines() if ln.strip() and not ln.strip().startswith("#")]
@@ -380,8 +380,18 @@ class TemplateFlowTest(unittest.TestCase):
         self.assertNotRegex(text, r"runs as the user")
         for ln in (ln for ln in text.splitlines() if HUMAN_MARK in ln):
             self.assertRegex(ln, r'say "done"')
-            self.assertRegex(ln, r"re-run check")
-        self.assertIn(".git/yab/onboarded", text)
+        step_a = next(ln for ln in text.splitlines() if ln.startswith("Human step A"))
+        step_b = next(ln for ln in text.splitlines() if ln.startswith("Human step B"))
+        self.assertIn("re-run check", step_a)
+        self.assertRegex(step_b, r"\bstop\b")
+        self.assertNotIn("re-run check", step_b)
+        self.assertNotRegex(step_b, r"(?i)re-run `?apply|step 9")
+        # The marker lives in the git common dir (also right for linked worktrees); no fallback to asking the user.
+        for cmd in ("git rev-parse --git-common-dir", "ls .git/yab/onboarded"):
+            self.assertTrue(bash_policy.is_allowed(cmd)[0], cmd)
+        self.assertIn("`ls <git-common-dir>/yab/onboarded`", text)
+        self.assertNotIn("ask the user to confirm instead", text)
+        self.assertNotIn("`ls .git/yab", text)
         # Outside those instructions the agent must never be told to run set-url or --force.
         stripped = agent_text(text)
         self.assertNotIn("set-url", stripped)

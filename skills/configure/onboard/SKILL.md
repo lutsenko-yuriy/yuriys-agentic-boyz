@@ -64,9 +64,9 @@ When `template_mode` is true, ask: "(a) maintaining YAB itself, or (b) a fresh p
 For both human steps, first get the absolute repo root with `git rev-parse --show-toplevel` and the interpreter from probe's `pythons_with_tomllib`, and print the command as one ready-to-paste line with both filled in (a new terminal window opens in the home directory, not the repo).
 
 Human step A (new project): ask the user to open a separate terminal window and paste `cd <absolute repo root> && git remote set-url origin <their repo URL>`, then say "done"; re-run check afterwards. The gate blocks it for you.
-Human step B (YAB fork for maintenance): ask the user to open a separate terminal window and paste `cd <absolute repo root> && <interpreter> scripts/onboard/onboard.py mark --force` (it needs an interactive terminal), then say "done"; re-run check afterwards.
+Human step B (YAB fork for maintenance): ask the user to open a separate terminal window and paste `cd <absolute repo root> && <interpreter> scripts/onboard/onboard.py mark --force` (it needs an interactive terminal), then say "done". Then verify the marker (below) and stop: do not run check or apply again, and do not go on to later steps.
 
-After step B, confirm the marker took effect with `ls .git/yab/onboarded` (in a linked worktree `.git` is a file: then ask the user to confirm instead).
+To verify the marker after step B, run `git rev-parse --git-common-dir`, then `ls <git-common-dir>/yab/onboarded` with that output in place of the placeholder. If it is missing, ask the user to repeat step B.
 
 Never run `git remote` yourself, touch the template sentinel yourself, or force the marker; do not use a `!` prefix for these (it may not be a terminal and may still pass through the gate).
 

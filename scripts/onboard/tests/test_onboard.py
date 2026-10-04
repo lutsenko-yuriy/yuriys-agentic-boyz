@@ -235,7 +235,7 @@ class CheckTests(unittest.TestCase):
         self.assertNotIn("project.project_id", self.msgs(r))
 
     def test_linear_rejects_none_as_project_id_any_case(self):
-        for value in ("none", "None", " NONE "):
+        for value in ("none", "None", " NONE ", "none (no project)", "None - tbd"):
             r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"', 'project_id = "%s"' % value)})
             self.assertIn("project.project_id must be a real id", self.msgs(r), value)
         gh = GOOD_TOML.replace('project_id = "p1"', 'project_id = "none"').replace('"linear"', '"github"')
