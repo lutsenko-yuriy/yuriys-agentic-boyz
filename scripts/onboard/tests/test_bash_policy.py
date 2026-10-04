@@ -122,7 +122,7 @@ class FlagTests(PolicyCase):
     def test_deny_find_exec_family(self):
         for flag in "-exec -execdir -ok -okdir".split():
             self.deny("find . %s rm {} +" % flag)
-        self.deny("find . -exec rm {} \;")
+        self.deny("find . -exec rm {} \\;")
 
     def test_deny_find_delete(self):
         self.deny("find . -delete")
