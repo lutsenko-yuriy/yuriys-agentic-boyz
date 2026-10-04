@@ -332,3 +332,51 @@ class OnboardTests(PolicyCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExpansionAndClusterTests(PolicyCase):
+    def test_deny_brace_expansion(self):
+        self.deny("git log {--output=pwned,}")
+        self.deny("find d {-delete,-print}")
+        self.deny("sort {-o,out} in")
+        self.deny("rg {--pre=sh,} x f")
+
+    def test_deny_sort_clustered_output_flag(self):
+        self.deny("sort -ro out in")
+        self.deny("sort -mo out in")
+        self.deny("sort -uo out in")
+
+    def test_deny_sort_abbreviated_long_flags(self):
+        self.deny("sort --out=out in")
+        self.deny("sort --o out in")
+        self.deny("sort --compress-prog=sh in")
+
+    def test_allow_sort_operand_after_double_dash(self):
+        self.allow("sort -r -- -o")
+
+    def test_deny_uniq_stdin_dash_and_double_dash_output(self):
+        self.deny("cat in | uniq - out")
+        self.deny("uniq -- in out")
+
+    def test_allow_uniq_stdin_dash_alone(self):
+        self.allow("cat in | uniq -c -")
+
+    def test_deny_tree_clustered_output_and_html_rewrite(self):
+        self.deny("tree -ao out .")
+        self.deny("tree -R -H . -L 2")
+
+    def test_deny_file_clustered_and_abbreviated_compile(self):
+        self.deny("file -zC -m in")
+        self.deny("file --comp -m in")
+
+    def test_deny_date_clustered_and_abbreviated_set(self):
+        self.deny("date -us 1200")
+        self.deny("date --se=1200")
+
+    def test_deny_rg_abbreviated_pre(self):
+        self.deny("rg --pr=sh x f")
+
+    def test_deny_gh_clustered_web_and_token(self):
+        self.deny("gh auth status -th github.com")
+        self.deny("gh repo view -wb main")
+        self.deny("gh repo view --we")
