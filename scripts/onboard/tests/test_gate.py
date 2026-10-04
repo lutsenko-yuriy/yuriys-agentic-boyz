@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -297,12 +298,26 @@ class FailureSemantics(Base):
         self.assertEqual(run({"hook_event_name": "SessionStart", "cwd": str(self.root)}), (0, "", ""))
 
 
+class GitTimeout(Base):
+    def test_gate_git_calls_use_a_short_timeout(self):
+        seen = []
+        real_root, real_marker = onboard.repo_root, onboard.marker_path
+        with mock.patch.object(onboard, "repo_root", lambda *a, **k: (seen.append(k.get("timeout")), real_root(*a, **k))[1]), \
+                mock.patch.object(onboard, "marker_path", lambda *a, **k: (seen.append(k.get("timeout")), real_marker(*a, **k))[1]):
+            run(pre(self.root, "Read", {}))
+        self.assertEqual(len(seen), 2)
+        for t in seen:
+            self.assertTrue(t is not None and t <= 2, seen)
+
+
 class WrapperTests(Base):
     """gate.sh must turn any gate.py failure into the per-event rule (Claude Code fails open except on exit 2)."""
 
-    def sh(self, event, payload, python=None, gate_py=None):
+    def sh(self, event, payload, python=None, gate_py=None, deadline=None):
         env = dict(os.environ)
         env["YAB_GATE_PYTHON"] = python or sys.executable
+        if deadline:
+            env["YAB_GATE_DEADLINE"] = deadline
         script = GATE_SH
         if gate_py is not None:  # a copy of the wrapper next to a fake gate.py ("" = no gate.py at all)
             d = Path(self.tmp) / "fake"
@@ -353,6 +368,22 @@ class WrapperTests(Base):
         code, _, err = self.sh("UserPromptExpansion", {}, gate_py="import sys; sys.stderr.write('why'); sys.exit(10)\n")
         self.assertEqual(code, 2)
         self.assertIn("why", err)
+
+    def test_hang_is_killed_and_follows_per_event_rule(self):
+        hang = "import time; time.sleep(30)\n"
+        start = time.time()
+        self.assertEqual(self.sh("PreToolUse", {}, gate_py=hang, deadline="1")[0], 2)
+        self.assertEqual(self.sh("SessionStart", {}, gate_py=hang, deadline="1"), (0, "", ""))
+        self.assertEqual(self.sh("UserPromptExpansion", {}, gate_py=hang, deadline="1"), (0, "", ""))
+        self.assertLess(time.time() - start, 15)
+
+    def test_default_deadline_is_below_the_hook_timeout(self):
+        self.assertRegex(GATE_SH.read_text(), r"YAB_GATE_DEADLINE:-([0-4])\b")
+
+    def test_stdin_reaches_gate_py(self):
+        echo = "import sys, json; sys.stdout.write(json.dumps({'got': len(sys.stdin.read())}))\n"
+        code, out, _ = self.sh("SessionStart", "abcde", gate_py=echo)
+        self.assertEqual((code, json.loads(out)), (0, {"got": 5}))
 
     def test_exit_codes_other_than_0_and_2_are_failures(self):
         self.assertEqual(self.sh("PreToolUse", {}, gate_py="import sys; sys.exit(1)\n")[0], 2)

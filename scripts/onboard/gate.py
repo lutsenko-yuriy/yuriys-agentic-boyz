@@ -17,6 +17,10 @@ PreToolUse fails closed (deny); SessionStart and UserPromptExpansion fail open, 
 gate.sh enforces the same rule when this process itself dies, and maps BLOCK_EXIT to exit 2. Both take the event
 name as argv[1], used only when the payload is unreadable.
 
+A hang also fails OPEN (Claude Code lets the call through when a hook times out), so gate.sh runs the interpreter
+under a 3 s watchdog (YAB_GATE_DEADLINE) and the gate's git calls time out after 2 s; the hook `timeout` is only a
+backstop and must stay above 3.
+
 Intended wiring (WU7, not wired yet; each row `"timeout": 5`):
     SessionStart (matcher startup)  scripts/onboard/gate.sh SessionStart
     UserPromptExpansion             scripts/onboard/gate.sh UserPromptExpansion
@@ -57,6 +61,9 @@ FAIL_OPEN_EVENTS = frozenset({"SessionStart", "UserPromptExpansion"})
 # mistake for a deliberate block. gate.sh maps exactly this code to Claude Code's blocking exit 2.
 BLOCK_EXIT = 10
 
+# Well under gate.sh's 3 s watchdog and the 5 s hook timeout, so a slow git ends in the gate's own per-event rule.
+GIT_TIMEOUT = 2
+
 OK = (0, "", "")
 
 
@@ -70,13 +77,13 @@ def _deny(reason: str) -> Result:
 
 
 def is_onboarded(root: Path) -> bool:
-    return onboard.marker_path(root).is_file()
+    return onboard.marker_path(root, timeout=GIT_TIMEOUT).is_file()
 
 
 def _find_root(data: Dict[str, Any]) -> Path:
     start = data.get("cwd") if isinstance(data.get("cwd"), str) and data.get("cwd") else None
     start = start or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    return onboard.repo_root(Path(start))
+    return onboard.repo_root(Path(start), timeout=GIT_TIMEOUT)
 
 
 def bootstrap_target_allowed(root: Path, raw: Any, cwd: Path) -> bool:
