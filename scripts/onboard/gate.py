@@ -39,10 +39,9 @@ Result = Tuple[int, str, str]  # exit code, stdout, stderr
 NEEDS_ONBOARDING = "Onboarding required — run /onboard"
 ONBOARD_SKILL = "onboard"
 # The artifacts /onboard writes; everything else is filled by `onboard.py apply`. Single source of truth.
-BOOTSTRAP_PATHS = (
-    "docs/TECH_STACK.md", "docs/ARCHITECTURE.md", "docs/CODE_STYLE.md", "docs/CONSTRAINTS.md", "AGENTS.md",
-    "skill_router.toml", "skills/shared/project-config.md", "skills/shared/pm-tool-mapping.md",
-    "docs/MODEL_TIERS.md", "CLAUDE.local.md",
+BOOTSTRAP_PATHS = tuple(onboard.ARTIFACTS) + (
+    "docs/ARCHITECTURE.md", "AGENTS.md", "skill_router.toml", "skills/shared/project-config.md",
+    "skills/shared/pm-tool-mapping.md", "docs/MODEL_TIERS.md", "CLAUDE.local.md",
 )
 WRITE_TOOLS = {"Edit": "file_path", "Write": "file_path", "MultiEdit": "file_path", "NotebookEdit": "notebook_path"}
 MCP_READ_PREFIXES = ("get_", "list_", "search_", "extract_")

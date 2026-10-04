@@ -1,3 +1,4 @@
+import importlib
 import json
 import os
 import shutil
@@ -6,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts.onboard import gate, onboard
 
@@ -176,6 +178,17 @@ class WritePaths(Base):
         for rel in gate.BOOTSTRAP_PATHS:
             self.assertIsNone(self.write(str(self.root / rel)), rel)
             self.assertIsNone(self.write(rel), rel)
+
+    def test_every_onboard_artifact_is_a_bootstrap_path(self):
+        for rel in onboard.ARTIFACTS:
+            self.assertIn(rel, gate.BOOTSTRAP_PATHS)
+            self.assertIsNone(self.write(rel), rel)
+
+    def test_new_onboard_artifact_flows_into_bootstrap_paths(self):
+        with mock.patch.object(onboard, "ARTIFACTS", onboard.ARTIFACTS + ["docs/NEW_ARTIFACT.md"]):
+            importlib.reload(gate)
+            self.addCleanup(importlib.reload, gate)
+            self.assertIn("docs/NEW_ARTIFACT.md", gate.BOOTSTRAP_PATHS)
 
     def test_all_write_tools_checked(self):
         for tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
