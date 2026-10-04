@@ -634,8 +634,15 @@ class ShippedTemplateTests(unittest.TestCase):
         for rel in onboard.ARTIFACTS:
             self.assertTrue(any(rel in e and "<...>" in e for e in r["errors"]), (rel, r["errors"]))
 
-    def test_real_html_autolinks_and_code_are_not_tokens(self):
-        body = "# Doc\n\nSee <https://example.com/x> and <br> and <a href=\"u\">x</a> and `Vec<T>`.\n\n```\nList<String> x;\n```\n<!-- <tool> -->\n"
+    def test_template_tokens_match_shipped_templates(self):
+        found = set()
+        for rel in onboard.ARTIFACTS:
+            found.update(re.findall(r"<[^<>\n]+>", onboard._strip_comments(shipped(rel))))
+        self.assertEqual(found, set(onboard.TEMPLATE_TOKENS))
+
+    def test_ordinary_angle_brackets_are_not_tokens(self):
+        body = ("# Doc\n\nUse Future<void> and Map<string, int>, mail <x@example.com>, <h2> and <https://e.com>.\n"
+                "A -> <validate> -> done.\n\n~~~\nList<String> x;\n~~~\n\n    Set<Foo> y;\n<!-- <tool> -->\n")
         r = self.check({"docs/CONSTRAINTS.md": body})
         self.assertTrue(r["ok"], r)
 

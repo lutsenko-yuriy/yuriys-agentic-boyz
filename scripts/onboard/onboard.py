@@ -44,6 +44,15 @@ YAB_REPO = "lutsenko-yuriy/yuriys-agentic-boyz"
 MAX_SCAN_BYTES = 1_000_000
 TEMPLATE_MARKER = "<!-- yab:template -->"
 ARTIFACTS = ["docs/TECH_STACK.md", "docs/CODE_STYLE.md", "docs/CONSTRAINTS.md"]
+# The <...> tokens the shipped templates use (outside comments); a test keeps this in sync with the templates.
+TEMPLATE_TOKENS = [
+    "<language>", "<version>", "<e.g. application code, scripts>", "<framework or key library, with a link>",
+    "<target platforms, runtimes or deployment environments>", "<tool>", "<service>", "<style guide link>",
+    "<e.g. team size, who reviews, what support capacity exists>",
+    "<e.g. pre-launch vs. in production; what to optimise for>",
+    "<e.g. available devices, test environments, access limits>",
+    "<e.g. cost ceilings, licensing, privacy or regulatory rules>",
+]
 REQUIRED_PROJECT_FIELDS = ["name", "description", "issue_prefix"]
 NOTES_DIR = "docs/knowledge/notes"
 NOTES_SKIP = {"BOOKMARKS.md", "INDEX.md", "TEMPLATE.md"}
@@ -167,21 +176,9 @@ def _strip_comments(text: str) -> str:
     return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
 
-HTML_TAGS = {"a", "b", "br", "code", "details", "div", "em", "hr", "i", "img", "kbd", "li", "ol", "p", "pre", "span",
-             "strong", "sub", "summary", "sup", "table", "td", "th", "tr", "ul"}
-TOKEN_RE = re.compile(r"<([a-z][^<>\n]*)>")
-
-
 def _template_tokens(text: str) -> List[str]:
-    """Unfilled `<token>` placeholders outside comments and code; real HTML tags and autolinks do not count."""
-    text = re.sub(r"```.*?```|`[^`\n]*`", "", _strip_comments(text), flags=re.DOTALL)
-    found = []
-    for m in TOKEN_RE.finditer(text):
-        body = m.group(1)
-        if re.match(r"[a-z][a-z0-9+.-]*:", body) or re.split(r"[\s/]", body, 1)[0] in HTML_TAGS:
-            continue
-        found.append(m.group(0))
-    return found
+    text = _strip_comments(text)
+    return [t for t in TEMPLATE_TOKENS if t in text]
 
 
 def _languages(tech_stack: str) -> List[str]:
