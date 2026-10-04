@@ -7,7 +7,7 @@
 ## Languages
 
 <!-- One row per language, name in the first column. Every language listed here must also be named in
-     docs/CODE_STYLE.md under "## Base standard" (matched case-insensitively). -->
+     docs/CODE_STYLE.md under "## Base standard" (exact, case-sensitive match). -->
 
 | Language | Version | Used for |
 |---|---|---|

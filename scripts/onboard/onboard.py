@@ -188,7 +188,7 @@ def _lang_name(part: str) -> str:
 
 def _mentions(text: str, word: str) -> bool:
     # +, # and - are part of a name ("C" is not "C++"); a trailing digit is a version ("C++17", "Python3").
-    return re.search(r"(?<![\w+#-])%s(?![A-Za-z_+#-])" % re.escape(word), text, re.IGNORECASE) is not None
+    return re.search(r"(?<![\w+#-])%s(?![A-Za-z_+#-])" % re.escape(word), text) is not None
 
 
 def _scanned(rel: str) -> bool:

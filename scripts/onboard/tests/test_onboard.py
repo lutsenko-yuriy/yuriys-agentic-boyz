@@ -384,6 +384,18 @@ class CheckTests(unittest.TestCase):
         style = "## Base standard\n\nC++ Core Guidelines; Objective-C conventions.\n"
         self.assertIn("language C", self.msgs(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style})))
 
+    def test_language_match_is_case_sensitive(self):
+        tech = GOOD_TECH.replace("| Dart | 3.6 |", "| Go | 1.22 |")
+        self.assertIn("language Go", self.msgs(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": "## Base standard\n\nPlease go to the style guide.\n"})))
+        self.assertTrue(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": "## Base standard\n\nGo: Effective Go.\n"})["ok"])
+
+    def test_c_family_boundaries_case_sensitive(self):
+        for lang, covered, uncovered in [("C", "C: MISRA.", "c++ and c# rules, Objective-C"), ("C#", "C#: Microsoft guide.", "C and C++"), ("R", "R: tidyverse.", "Rust, r-based")]:
+            tech = GOOD_TECH.replace("| Dart | 3.6 |", "| %s | 1 |" % lang)
+            with self.subTest(lang):
+                self.assertTrue(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": "## Base standard\n\n" + covered + "\n"})["ok"])
+                self.assertFalse(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": "## Base standard\n\n" + uncovered + "\n"})["ok"])
+
     def test_missing_languages_section(self):
         r = self.check({"docs/TECH_STACK.md": "# Stack\n"})
         self.assertIn("Languages", self.msgs(r))
