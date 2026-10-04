@@ -134,6 +134,10 @@ def probe(run_tools: bool = True) -> Dict[str, Any]:
         "ollama_models": None,
         "gh_authenticated": None,
     }
+    if run_tools and shutil.which("python3"):  # bare python3 is not in the versioned list above
+        res = _tool(["python3", "-c", "import tomllib"])
+        if res is not None and res.returncode == 0:
+            data["pythons_with_tomllib"].append("python3")
     if run_tools and data["toolchains"]["ollama"]:
         res = _tool(["ollama", "list"])
         if res is not None and res.returncode == 0:

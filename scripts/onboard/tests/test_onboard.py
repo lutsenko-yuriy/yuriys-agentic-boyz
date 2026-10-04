@@ -80,6 +80,29 @@ class ProbeTests(unittest.TestCase):
             data = onboard.probe(run_tools=False)
         self.assertEqual(data["pythons_with_tomllib"], ["python3.12"])
 
+    def test_bare_python3_listed_when_it_has_tomllib(self):
+        calls = []
+
+        def fake(cmd):
+            calls.append(cmd)
+            return mock.Mock(returncode=0 if cmd[0] == "python3" else 1, stdout="")
+
+        with mock.patch("shutil.which", side_effect=lambda n: "/bin/" + n if n in ("python3", "python3.12") else None), \
+                mock.patch.object(onboard, "_tool", side_effect=fake):
+            data = onboard.probe()
+        self.assertEqual(data["pythons_with_tomllib"], ["python3.12", "python3"])
+        self.assertIn(["python3", "-c", "import tomllib"], calls)
+
+    def test_bare_python3_without_tomllib_not_listed(self):
+        with mock.patch("shutil.which", side_effect=lambda n: "/bin/" + n if n == "python3" else None), \
+                mock.patch.object(onboard, "_tool", return_value=mock.Mock(returncode=1, stdout="")):
+            self.assertEqual(onboard.probe()["pythons_with_tomllib"], [])
+
+    def test_bare_python3_not_executed_without_run_tools(self):
+        with mock.patch("shutil.which", side_effect=lambda n: "/bin/" + n if n == "python3" else None), \
+                mock.patch("subprocess.run", side_effect=AssertionError("must not execute")):
+            self.assertEqual(onboard.probe(run_tools=False)["pythons_with_tomllib"], [])
+
 
 class LoadTomlTests(unittest.TestCase):
     def test_missing_tomllib_fails_loudly_exit_2(self):
