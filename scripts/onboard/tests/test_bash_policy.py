@@ -351,12 +351,25 @@ class ExpansionAndClusterTests(PolicyCase):
         self.deny("sort --o out in")
         self.deny("sort --compress-prog=sh in")
 
-    def test_allow_sort_operand_after_double_dash(self):
-        self.allow("sort -r -- -o")
+    def test_deny_denied_flag_after_double_dash(self):
+        # A value flag can swallow `--`, so flags after it still parse as flags.
+        self.deny("sort -T -- -o out in")
+        self.deny("file -m -- -C")
+        self.deny("rg -e -- --pre=sh x f")
+        self.deny("git blame -L -- --output=pw README.md")
+        self.deny("tree -P -- -o out .")
+        self.deny("gh auth status -h -- --show-token")
 
     def test_deny_uniq_stdin_dash_and_double_dash_output(self):
         self.deny("cat in | uniq - out")
         self.deny("uniq -- in out")
+
+    def test_deny_uniq_arg_after_first_operand(self):
+        self.deny("uniq in -out")
+        self.deny("cat in | uniq - -out")
+
+    def test_allow_uniq_value_flags_before_operand(self):
+        self.allow("uniq -c -f 1 -s 2 in")
 
     def test_allow_uniq_stdin_dash_alone(self):
         self.allow("cat in | uniq -c -")
