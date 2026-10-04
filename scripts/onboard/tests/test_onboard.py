@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -384,6 +385,18 @@ class CheckTests(unittest.TestCase):
         style = "## Base standard\n\nC++ Core Guidelines; Objective-C conventions.\n"
         self.assertIn("language C", self.msgs(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style})))
 
+    def test_language_match_is_case_sensitive(self):
+        tech = GOOD_TECH.replace("| Dart | 3.6 |", "| Go | 1.22 |")
+        self.assertIn("language Go", self.msgs(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": "## Base standard\n\nPlease go to the style guide.\n"})))
+        self.assertTrue(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": "## Base standard\n\nGo: Effective Go.\n"})["ok"])
+
+    def test_c_family_boundaries_case_sensitive(self):
+        for lang, covered, uncovered in [("C", "C: MISRA.", "c++ and c# rules, Objective-C"), ("C#", "C#: Microsoft guide.", "C and C++"), ("R", "R: tidyverse.", "Rust, r-based")]:
+            tech = GOOD_TECH.replace("| Dart | 3.6 |", "| %s | 1 |" % lang)
+            with self.subTest(lang):
+                self.assertTrue(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": "## Base standard\n\n" + covered + "\n"})["ok"])
+                self.assertFalse(self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": "## Base standard\n\n" + uncovered + "\n"})["ok"])
+
     def test_missing_languages_section(self):
         r = self.check({"docs/TECH_STACK.md": "# Stack\n"})
         self.assertIn("Languages", self.msgs(r))
@@ -557,3 +570,116 @@ class RepoRootTests(unittest.TestCase):
             plain.mkdir()
             with self.assertRaises(onboard.OnboardError):
                 onboard.repo_root(plain)
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+MARKER = onboard.TEMPLATE_MARKER
+
+
+def shipped(rel):
+    return (REPO_ROOT / rel).read_text(encoding="utf-8")
+
+
+def filled(rel):
+    return shipped(rel).replace(MARKER + "\n", "")
+
+
+def done(text):
+    return re.sub(r"<[a-z][^<>\n]*>", "x", text)
+
+
+@needs_toml
+class ShippedTemplateTests(unittest.TestCase):
+    def check(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            return onboard.check(make_repo(tmp, files))
+
+    def test_every_artifact_template_ships_with_marker(self):
+        for rel in onboard.ARTIFACTS:
+            with self.subTest(rel):
+                self.assertTrue(shipped(rel).startswith(MARKER))
+
+    def test_marker_comment_describes_actual_check_wording(self):
+        for rel in onboard.ARTIFACTS:
+            with self.subTest(rel):
+                self.assertIn("reports it as still a template", shipped(rel))
+                self.assertNotIn("as missing", shipped(rel))
+
+    def test_fresh_templates_reported_missing(self):
+        r = self.check({rel: shipped(rel) for rel in onboard.ARTIFACTS})
+        for rel in onboard.ARTIFACTS:
+            self.assertIn("%s is still a template" % rel, r["errors"])
+
+    def test_filled_examples_pass_with_base_standard_cross_check(self):
+        tech = filled("docs/TECH_STACK.md").replace(
+            "| <language> | <version> | <e.g. application code, scripts> |", "| Rust | 1.80 | services |\n| Kotlin | 2.0 | apps |"
+        )
+        style = filled("docs/CODE_STYLE.md").replace(
+            "<language>: <style guide link>", "Rust: Rust Style Guide. Kotlin: Kotlin coding conventions."
+        )
+        r = self.check({"docs/TECH_STACK.md": done(tech), "docs/CODE_STYLE.md": done(style), "docs/CONSTRAINTS.md": done(filled("docs/CONSTRAINTS.md"))})
+        self.assertTrue(r["ok"], r)
+
+    def test_filled_examples_fail_when_base_standard_misses_a_language(self):
+        tech = filled("docs/TECH_STACK.md").replace(
+            "| <language> | <version> | <e.g. application code, scripts> |", "| Python | 3.12 | scripts |\n| Go | 1.22 | tools |"
+        )
+        style = filled("docs/CODE_STYLE.md").replace("<language>: <style guide link>", "Python: PEP 8.")
+        r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
+        self.assertIn("CODE_STYLE Base standard does not cover TECH_STACK language Go", r["errors"])
+
+    def test_marker_removed_but_tokens_left_fails_check(self):
+        files = {rel: filled(rel) for rel in onboard.ARTIFACTS}
+        r = self.check(files)
+        for rel in onboard.ARTIFACTS:
+            self.assertTrue(any(rel in e and "<...>" in e for e in r["errors"]), (rel, r["errors"]))
+
+    def test_template_tokens_match_shipped_templates(self):
+        found = set()
+        for rel in onboard.ARTIFACTS:
+            found.update(re.findall(r"<[^<>\n]+>", onboard._strip_comments(shipped(rel))))
+        self.assertEqual(found, set(onboard.TEMPLATE_TOKENS))
+
+    def test_tokens_inside_code_are_not_flagged(self):
+        body = ("# Doc\n\nTag `v<version>` and ``Run `./tool <tool>` `` here.\n\n```\nx <language>\n```\n\n"
+                "~~~\ny <service>\n~~~\n")
+        self.assertTrue(self.check({"docs/CONSTRAINTS.md": body})["ok"])
+        r = self.check({rel: filled(rel) for rel in onboard.ARTIFACTS})
+        self.assertFalse(r["ok"])
+
+    def test_ordinary_angle_brackets_are_not_tokens(self):
+        body = ("# Doc\n\nUse Future<void> and Map<string, int>, mail <x@example.com>, <h2> and <https://e.com>.\n"
+                "A -> <validate> -> done.\n\n~~~\nList<String> x;\n~~~\n\n    Set<Foo> y;\n<!-- <tool> -->\n")
+        r = self.check({"docs/CONSTRAINTS.md": body})
+        self.assertTrue(r["ok"], r)
+
+    def test_mentions_inside_html_comments_do_not_count(self):
+        tech = filled("docs/TECH_STACK.md").replace(
+            "| <language> | <version> | <e.g. application code, scripts> |", "| Rust | 1.80 | services |"
+        )
+        style = filled("docs/CODE_STYLE.md").replace("<language>: <style guide link>", "<!-- Rust Style Guide -->")
+        r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
+        self.assertIn("CODE_STYLE Base standard does not cover TECH_STACK language Rust", r["errors"])
+
+    def test_template_comment_example_languages_do_not_count(self):
+        tech = filled("docs/TECH_STACK.md").replace(
+            "| <language> | <version> | <e.g. application code, scripts> |", "| Python | 3 | x |"
+        )
+        r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": filled("docs/CODE_STYLE.md"), "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
+        self.assertIn("language Python", " | ".join(r["errors"]))
+
+
+class PlaceholderCoverageTests(unittest.TestCase):
+    def test_every_placeholder_is_fillable_or_in_a_bootstrap_file(self):
+        from scripts.onboard import gate
+
+        fillable = set(onboard.PLACEHOLDER_FIELDS) | {"PM_TOOL"}
+        tracked = git(REPO_ROOT, "ls-files").splitlines()
+        stranded = []
+        for rel in tracked:
+            if rel in ("setup.sh", "README.md") or not onboard._scanned(rel) or rel in gate.BOOTSTRAP_PATHS:
+                continue
+            text = onboard._read_regular(REPO_ROOT / rel) or ""
+            stranded += ["%s %s" % (rel, m) for m in onboard.PLACEHOLDER_RE.findall(text) if m[2:-2] not in fillable]
+        self.assertEqual(stranded, [])
+

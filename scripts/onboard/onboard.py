@@ -44,6 +44,15 @@ YAB_REPO = "lutsenko-yuriy/yuriys-agentic-boyz"
 MAX_SCAN_BYTES = 1_000_000
 TEMPLATE_MARKER = "<!-- yab:template -->"
 ARTIFACTS = ["docs/TECH_STACK.md", "docs/CODE_STYLE.md", "docs/CONSTRAINTS.md"]
+# The <...> tokens the shipped templates use (outside comments); a test keeps this in sync with the templates.
+TEMPLATE_TOKENS = [
+    "<language>", "<version>", "<e.g. application code, scripts>", "<framework or key library, with a link>",
+    "<target platforms, runtimes or deployment environments>", "<tool>", "<service>", "<style guide link>",
+    "<e.g. team size, who reviews, what support capacity exists>",
+    "<e.g. pre-launch vs. in production; what to optimise for>",
+    "<e.g. available devices, test environments, access limits>",
+    "<e.g. cost ceilings, licensing, privacy or regulatory rules>",
+]
 REQUIRED_PROJECT_FIELDS = ["name", "description", "issue_prefix"]
 NOTES_DIR = "docs/knowledge/notes"
 NOTES_SKIP = {"BOOKMARKS.md", "INDEX.md", "TEMPLATE.md"}
@@ -163,6 +172,16 @@ def _section(text: str, heading: str) -> str:
     return m.group(1) if m else ""
 
 
+def _strip_comments(text: str) -> str:
+    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+
+def _template_tokens(text: str) -> List[str]:
+    text = re.sub(r"^(```|~~~).*?^\1[^\n]*$|(`+)[^`].*?\2(?!`)", "", _strip_comments(text),
+                  flags=re.DOTALL | re.MULTILINE)
+    return [t for t in TEMPLATE_TOKENS if t in text]
+
+
 def _languages(tech_stack: str) -> List[str]:
     lines = [ln.strip() for ln in _section(tech_stack, "Languages").splitlines() if ln.strip().startswith("|")]
     sep = next((i for i, ln in enumerate(lines) if re.fullmatch(r"\|[\s:|-]+\|?", ln)), None)
@@ -184,7 +203,7 @@ def _lang_name(part: str) -> str:
 
 def _mentions(text: str, word: str) -> bool:
     # +, # and - are part of a name ("C" is not "C++"); a trailing digit is a version ("C++17", "Python3").
-    return re.search(r"(?<![\w+#-])%s(?![A-Za-z_+#-])" % re.escape(word), text, re.IGNORECASE) is not None
+    return re.search(r"(?<![\w+#-])%s(?![A-Za-z_+#-])" % re.escape(word), text) is not None
 
 
 def _scanned(rel: str) -> bool:
@@ -307,6 +326,9 @@ def check(root: Path) -> Dict[str, Any]:
             continue
         if TEMPLATE_MARKER not in text:
             texts[rel] = text
+            tokens = _template_tokens(text)
+            if tokens:
+                errors.append("%s still contains <...> template tokens (e.g. %s)" % (rel, tokens[0]))
         elif not template_mode:
             errors.append("%s is still a template" % rel)
     config_errors: List[str] = []
@@ -317,7 +339,7 @@ def check(root: Path) -> Dict[str, Any]:
         langs = _languages(texts["docs/TECH_STACK.md"])
         if not langs:
             errors.append("docs/TECH_STACK.md has no ## Languages table rows")
-        base = _section(texts.get("docs/CODE_STYLE.md", ""), "Base standard")
+        base = _strip_comments(_section(texts.get("docs/CODE_STYLE.md", ""), "Base standard"))
         for lang in langs if "docs/CODE_STYLE.md" in texts else []:
             if not _mentions(base, lang):
                 errors.append("CODE_STYLE Base standard does not cover TECH_STACK language %s" % lang)

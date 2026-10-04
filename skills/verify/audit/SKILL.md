@@ -6,7 +6,7 @@ output_style: CONCISE
 description: Runtime and migration review of a PR/MR. Checks for launch-time failures, migration issues, platform-specific risks, state consistency problems, and business logic edge cases. Leaves inline comments prefixed with [audit] and produces a structured summary. Invoke after `implement` opens a PR/MR, in parallel with `review`.
 ---
 
-The Git host is **{{GIT_HOST}}**. The tech stack is **{{STACK}}**.
+The Git host is **{{GIT_HOST}}**. The tech stack is described in `docs/TECH_STACK.md`.
 
 @skills/shared/git-cli-safety.md
 
@@ -38,7 +38,7 @@ Look for related changes in manifests, lock files, env files, platform config.
 
 ### 4. Cross-reference intent
 
-Read `docs/PRODUCT_SPEC.md` and `CLAUDE.md` to understand the intended behaviour and check against it.
+Read `docs/PRODUCT_SPEC.md` and `CLAUDE.md` to understand the intended behaviour and check against it. Where relevant, also check the diff against `docs/CONSTRAINTS.md` (standing constraints), `docs/TECH_STACK.md` (declared languages and tooling) and `docs/CODE_STYLE.md` (style rules).
 
 ### 5. Reason through each potential finding
 

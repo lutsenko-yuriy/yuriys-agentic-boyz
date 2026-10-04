@@ -14,6 +14,9 @@ Full product specifications: docs/PRODUCT_SPEC.md
 |---|---|
 | docs/PRODUCT_SPEC.md | What the app does — feature requirements |
 | docs/ARCHITECTURE.md | How the code is organised — layers, directory structure, dependencies |
+| docs/TECH_STACK.md | Languages, frameworks, platforms and tooling the project uses |
+| docs/CODE_STYLE.md | Code style rules — base standard per language, formatting, linting, comment hygiene |
+| docs/CONSTRAINTS.md | Standing project constraints — reference when evaluating trade-offs |
 | docs/BACKLOG.md | Known issues and remaining work not yet released |
 | docs/CHANGELOG.md | Released version history |
 | docs/VERSIONING.md | Version numbering rules and CI/CD pipeline |
@@ -50,7 +53,7 @@ Full product specifications: docs/PRODUCT_SPEC.md
 
 {{ARCHITECTURE_SUMMARY}}
 
-Details and directory layout: @docs/ARCHITECTURE.md.
+Details and directory layout: @docs/ARCHITECTURE.md. Languages and tooling: docs/TECH_STACK.md.
 
 ## Common Commands
 
@@ -62,6 +65,8 @@ Details and directory layout: @docs/ARCHITECTURE.md.
 ## Code style
 
 {{CODE_STYLE}}
+
+See `docs/CODE_STYLE.md` for the full rules.
 
 ## Versioning
 
