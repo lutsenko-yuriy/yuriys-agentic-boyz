@@ -37,9 +37,7 @@ FIELD_CASES = {
     "VERSION_FIELD": ("version_field", "version"),
     "IN_QA_PATHS": ("in_qa_paths", "lib/"),
 }
-PM_CASES = {
-    "linear": "Linear", "github_issues": "GitHub Issues", "jira": "Jira", "shortcut": "Shortcut", "notion": "Notion",
-}
+PM_CASES = {"linear": "Linear", "github": "GitHub Issues"}
 # Left to later work units (tech-stack artifacts): apply must never touch them.
 UNMAPPED = ["CODE_STYLE", "FRAMEWORK", "PERSISTENCE", "STACK", "STATE_MANAGEMENT"]
 
@@ -123,13 +121,46 @@ class SubstitutionTests(unittest.TestCase):
                 self.assertEqual((root / "a.md").read_text(), label)
 
     def test_unknown_pm_is_an_error_and_writes_nothing(self):
+        for pm in ["trello", "jira", "github_issues", "files"]:
+            with self.subTest(pm), tempfile.TemporaryDirectory() as tmp:
+                root = self.repo(tmp, toml_text(pm, name="N"), {"a.md": ph("PROJECT_NAME")})
+                before = snapshot(root)
+                code, _, err = run_apply(root, "--root", str(root))
+                self.assertEqual(code, 3)
+                self.assertIn(pm, err)
+                self.assertEqual(snapshot(root), before)
+
+    def test_pm_tools_are_skill_router_providers(self):
+        from scripts.skill_router.providers import PROVIDER_REGISTRY
+        self.assertLessEqual(set(onboard.PM_TOOLS), set(PROVIDER_REGISTRY))
+
+    def test_invalid_issue_prefix_is_rejected_before_any_write(self):
+        for prefix in ["N/A", "na", "my app", "X", "1AB", "TOOLONGPREFIX"]:
+            with self.subTest(prefix), tempfile.TemporaryDirectory() as tmp:
+                root = self.repo(tmp, toml_text(issue_prefix=prefix), {"a.md": ph("ISSUE_PREFIX")})
+                before = snapshot(root)
+                code, _, err = run_apply(root, "--root", str(root))
+                self.assertEqual(code, 3)
+                self.assertIn("issue_prefix", err)
+                self.assertEqual(snapshot(root), before)
+
+    def test_multiline_value_is_rejected_before_any_write(self):
+        for value in ["a\nb", "a\r\nb", ["a\nb"]]:
+            with self.subTest(value), tempfile.TemporaryDirectory() as tmp:
+                root = self.repo(tmp, toml_text(description=value) if isinstance(value, str)
+                                 else toml_text(available_models=value), {"a.md": ph("PROJECT_DESCRIPTION")})
+                before = snapshot(root)
+                code, _, err = run_apply(root, "--root", str(root))
+                self.assertEqual(code, 3)
+                self.assertIn("single line", err)
+                self.assertEqual(snapshot(root), before)
+
+    def test_unknown_project_keys_are_warned(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = self.repo(tmp, toml_text("trello", name="N"), {"a.md": ph("PROJECT_NAME")})
-            before = snapshot(root)
-            code, _, err = run_apply(root, "--root", str(root))
-            self.assertEqual(code, 3)
-            self.assertIn("trello", err)
-            self.assertEqual(snapshot(root), before)
+            root = self.repo(tmp, toml_text(name="N", keep_license=False), {"a.md": ph("PROJECT_NAME")})
+            code, out, _ = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out)["warnings"], ["skill_router.toml: unknown project.keep_license ignored"])
 
     def test_empty_values_leave_placeholders_untouched(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -175,9 +206,9 @@ class SubstitutionTests(unittest.TestCase):
 
     def test_missing_project_table_is_all_empty(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = self.repo(tmp, '[providers]\npm = "jira"\n', {"a.md": ph("PROJECT_NAME") + ph("PM_TOOL")})
+            root = self.repo(tmp, '[providers]\npm = "github"\n', {"a.md": ph("PROJECT_NAME") + ph("PM_TOOL")})
             self.assertEqual(run_apply(root, "--root", str(root))[0], 0)
-            self.assertEqual((root / "a.md").read_text(), ph("PROJECT_NAME") + "Jira")
+            self.assertEqual((root / "a.md").read_text(), ph("PROJECT_NAME") + "GitHub Issues")
 
     def test_escaped_braces_and_unknown_names_untouched(self):
         text = 'f"{{{PROJECT_NAME}}}" ${{PROJECT_NAME}} {{OTHER}}\n'
@@ -344,14 +375,14 @@ class McpTests(unittest.TestCase):
             ("linear", {}, {"mcpServers": {"linear": self.LINEAR}}),
             ("linear", {"mcpServers": {"linear": "bad"}}, {"mcpServers": {"linear": self.LINEAR}}),
             ("linear", {"other": 1}, {"other": 1, "mcpServers": {"linear": self.LINEAR}}),
-            ("github_issues", None, "absent"),
-            ("github_issues", {"mcpServers": {"linear": self.LINEAR}}, "absent"),
-            ("github_issues", {"mcpServers": {"linear": self.LINEAR, "o": other}}, {"mcpServers": {"o": other}}),
-            ("github_issues", {"mcpServers": {"o": other}}, {"mcpServers": {"o": other}}),
-            ("github_issues", {"mcpServers": {}}, "absent"),
-            ("github_issues", {}, "absent"),
-            ("github_issues", {"other": 1, "mcpServers": {"linear": self.LINEAR}}, {"other": 1}),
-            ("jira", {"mcpServers": {"linear": self.LINEAR}}, "absent"),
+            ("github", None, "absent"),
+            ("github", {"mcpServers": {"linear": self.LINEAR}}, "absent"),
+            ("github", {"mcpServers": {"linear": self.LINEAR, "o": other}}, {"mcpServers": {"o": other}}),
+            ("github", {"mcpServers": {"o": other}}, {"mcpServers": {"o": other}}),
+            ("github", {"mcpServers": {}}, "absent"),
+            ("github", {}, "absent"),
+            ("github", {"other": 1, "mcpServers": {"linear": self.LINEAR}}, {"other": 1}),
+            ("github", {"mcpServers": {"linear": self.LINEAR}}, "absent"),
             ("", None, "absent"),
             ("", {"mcpServers": {"linear": self.LINEAR}}, {"mcpServers": {"linear": self.LINEAR}}),
         ]
@@ -364,7 +395,7 @@ class McpTests(unittest.TestCase):
     def test_bad_mcp_json_fails_before_any_write(self):
         for bad in ["{not json", "[]", '{"mcpServers": []}', '"x"']:
             with self.subTest(bad), tempfile.TemporaryDirectory() as tmp:
-                root = make_repo(tmp, {"skill_router.toml": toml_text("jira", name="N"), ".mcp.json": bad,
+                root = make_repo(tmp, {"skill_router.toml": toml_text("github", name="N"), ".mcp.json": bad,
                                        "a.md": ph("PROJECT_NAME")})
                 code, _, err = run_apply(root, "--root", str(root))
                 self.assertEqual(code, 3)
@@ -373,7 +404,7 @@ class McpTests(unittest.TestCase):
 
     def test_non_utf8_mcp_json_fails_cleanly(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_repo(tmp, {"skill_router.toml": toml_text("jira")})
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github")})
             (root / ".mcp.json").write_bytes(b"\xff\xfe")
             self.assertEqual(run_apply(root, "--root", str(root))[0], 3)
 
@@ -381,7 +412,7 @@ class McpTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
             target = Path(outside) / "m.json"
             target.write_text(json.dumps({"mcpServers": {"linear": self.LINEAR}}))
-            root = make_repo(tmp, {"skill_router.toml": toml_text("jira")})
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github")})
             os.symlink(target, root / ".mcp.json")
             code, _, err = run_apply(root, "--root", str(root))
             self.assertEqual(code, 3)
@@ -391,7 +422,7 @@ class McpTests(unittest.TestCase):
 
     def test_mcp_directory_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_repo(tmp, {"skill_router.toml": toml_text("jira")})
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github")})
             (root / ".mcp.json").mkdir()
             self.assertEqual(run_apply(root, "--root", str(root))[0], 3)
 
@@ -407,7 +438,7 @@ class McpTests(unittest.TestCase):
 class LicenceAndSentinelTests(unittest.TestCase):
     def run_case(self, project_extra="", files=None, origin=None):
         with tempfile.TemporaryDirectory() as tmp:
-            f = {"skill_router.toml": toml_text("jira") + project_extra, "LICENSE": "MIT\n"}
+            f = {"skill_router.toml": toml_text("github") + project_extra, "LICENSE": "MIT\n"}
             f.update(files or {})
             root = make_repo(tmp, f, origin)
             code, out, err = run_apply(root, "--root", str(root))
@@ -423,7 +454,7 @@ class LicenceAndSentinelTests(unittest.TestCase):
 
     def test_keep_licence_false_without_license_file_is_fine(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_repo(tmp, {"skill_router.toml": toml_text("jira") + "keep_licence = false\n"})
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github") + "keep_licence = false\n"})
             self.assertEqual(run_apply(root, "--root", str(root))[0], 0)
 
     def test_keep_licence_must_be_boolean(self):
@@ -436,7 +467,7 @@ class LicenceAndSentinelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
             target = Path(outside) / "L"
             target.write_text("MIT")
-            root = make_repo(tmp, {"skill_router.toml": toml_text("jira") + "keep_licence = false\n"})
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github") + "keep_licence = false\n"})
             os.symlink(target, root / "LICENSE")
             self.assertEqual(run_apply(root, "--root", str(root))[0], 0)
             self.assertFalse(os.path.lexists(root / "LICENSE"))
@@ -460,7 +491,7 @@ class LicenceAndSentinelTests(unittest.TestCase):
 
     def test_template_mode_refuses_and_changes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_repo(tmp, {"skill_router.toml": full_toml("github_issues") + "keep_licence = false\n",
+            root = make_repo(tmp, {"skill_router.toml": full_toml("github") + "keep_licence = false\n",
                                    ".yab-template": YAB_SENTINEL, "LICENSE": "MIT", "a.md": ph("PROJECT_NAME"),
                                    ".mcp.json": json.dumps({"mcpServers": {"linear": {}}})}, YAB_ORIGIN)
             before = snapshot(root)
@@ -475,7 +506,7 @@ class LicenceAndSentinelTests(unittest.TestCase):
 class CliTests(unittest.TestCase):
     def test_summary_json(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = make_repo(tmp, {"skill_router.toml": toml_text("jira", name="N"), "a.md": ph("PROJECT_NAME") + ph("TEAM_ID")})
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github", name="N"), "a.md": ph("PROJECT_NAME") + ph("TEAM_ID")})
             code, out, _ = run_apply(root, "--root", str(root))
             report = json.loads(out)
             self.assertEqual(code, 0)

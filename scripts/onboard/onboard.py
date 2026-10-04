@@ -59,9 +59,9 @@ PLACEHOLDER_FIELDS = {
     "TEST_HARNESS_FILE": "test_harness_file", "VERSION_FIELD": "version_field", "VERSION_FILE": "version_file",
 }
 LIST_FIELDS = {"available_models", "in_qa_paths"}
-PM_TOOLS = {
-    "linear": "Linear", "github_issues": "GitHub Issues", "jira": "Jira", "shortcut": "Shortcut", "notion": "Notion",
-}
+# Keys must be skill_router provider names (scripts/skill_router/providers): [providers].pm routes to that provider.
+PM_TOOLS = {"linear": "Linear", "github": "GitHub Issues"}
+PROJECT_KEYS = set(PLACEHOLDER_FIELDS.values()) | {"keep_licence"}
 MCP_LINEAR = {"type": "http", "url": "https://mcp.linear.app/mcp"}
 TOOLCHAINS = ["git", "gh", "ollama", "flutter", "dart", "node", "npm", "java", "gradle", "kotlinc", "cargo", "go", "ruby"]
 ENV_KEY_RE = re.compile(r"(_KEY|_TOKEN|_SECRET|_PAT)$")
@@ -229,11 +229,10 @@ def _template_mode(root: Path, errors: List[str]) -> bool:
     return False
 
 
-def _check_config(root: Path, errors: List[str]) -> str:
+def _read_config(root: Path) -> tuple:
     path = root / "skill_router.toml"
     if not path.is_file():
-        errors.append("skill_router.toml missing")
-        return ""
+        raise OnboardError("skill_router.toml missing")
     try:
         cfg = load_toml(path)
     except ValueError as e:
@@ -241,6 +240,14 @@ def _check_config(root: Path, errors: List[str]) -> str:
     project, providers = cfg.get("project", {}), cfg.get("providers", {})
     if not isinstance(project, dict) or not isinstance(providers, dict):
         raise OnboardError("skill_router.toml: [project] and [providers] must be tables")
+    return project, providers
+
+
+def _check_config(root: Path, errors: List[str]) -> str:
+    if not (root / "skill_router.toml").is_file():
+        errors.append("skill_router.toml missing")
+        return ""
+    project, providers = _read_config(root)
     for field in REQUIRED_PROJECT_FIELDS:
         if not str(project.get(field, "")).strip():
             errors.append("project.%s is empty" % field)
@@ -312,20 +319,6 @@ def check(root: Path) -> Dict[str, Any]:
     }
 
 
-def _read_config(root: Path) -> tuple:
-    path = root / "skill_router.toml"
-    if not path.is_file():
-        raise OnboardError("skill_router.toml missing")
-    try:
-        cfg = load_toml(path)
-    except ValueError as e:
-        raise OnboardError("skill_router.toml: %s" % e)
-    project, providers = cfg.get("project", {}), cfg.get("providers", {})
-    if not isinstance(project, dict) or not isinstance(providers, dict):
-        raise OnboardError("skill_router.toml: [project] and [providers] must be tables")
-    return project, providers
-
-
 def _values(project: Dict[str, Any], pm: str) -> Dict[str, str]:
     """Non-empty placeholder values only: an empty one must stay a placeholder so `check` still reports it."""
     values: Dict[str, str] = {}
@@ -336,6 +329,10 @@ def _values(project: Dict[str, Any], pm: str) -> Dict[str, str]:
         if not isinstance(raw, str):
             raise OnboardError("skill_router.toml: project.%s must be a string" % field)
         raw = raw.strip()
+        if "\n" in raw or "\r" in raw:
+            raise OnboardError("skill_router.toml: project.%s must be a single line" % field)
+        if field == "issue_prefix" and raw and not valid_prefix(raw):
+            raise OnboardError("skill_router.toml: project.issue_prefix %r is invalid (letters/digits, 2-10 chars, not N/A)" % raw)
         if PLACEHOLDER_RE.search(raw):
             raise OnboardError("skill_router.toml: project.%s must not contain a {{PLACEHOLDER}}" % field)
         if raw:
@@ -407,6 +404,7 @@ def apply(root: Path) -> Dict[str, Any]:
     if not isinstance(keep_licence, bool):
         raise OnboardError("skill_router.toml: project.keep_licence must be true or false")
     values = _values(project, pm)
+    warnings = ["skill_router.toml: unknown project.%s ignored" % k for k in sorted(set(project) - PROJECT_KEYS)]
     mcp = _plan_mcp(root, pm)
     edits: Dict[str, str] = {}
     unresolved: Dict[str, List[str]] = {}
@@ -445,6 +443,7 @@ def apply(root: Path) -> Dict[str, Any]:
         "mcp": "deleted" if mcp == "" else "unchanged" if mcp is None else "written",
         "license_deleted": license_deleted,
         "sentinel_deleted": sentinel_deleted,
+        "warnings": warnings,
     }
 
 
