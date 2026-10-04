@@ -26,7 +26,7 @@ cat >"$tmpd/in"  # a backgrounded command gets /dev/null as stdin, so hand it th
 
 "$py" "$dir/gate.py" "$event" <"$tmpd/in" >"$tmpd/out" 2>"$tmpd/err" &
 pid=$!
-( sleep "$deadline"; kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+( sleep "$deadline"; kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 &  # leftovers (a git child, the sleep) are harmless: no fds held
 watcher=$!
 wait "$pid" 2>/dev/null
 rc=$?
