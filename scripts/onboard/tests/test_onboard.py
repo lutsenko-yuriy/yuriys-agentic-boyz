@@ -234,6 +234,13 @@ class CheckTests(unittest.TestCase):
         r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"\n', "").replace('"linear"', '"github"')})
         self.assertNotIn("project.project_id", self.msgs(r))
 
+    def test_linear_rejects_none_as_project_id_any_case(self):
+        for value in ("none", "None", " NONE "):
+            r = self.check({"skill_router.toml": GOOD_TOML.replace('project_id = "p1"', 'project_id = "%s"' % value)})
+            self.assertIn("project.project_id must be a real id", self.msgs(r), value)
+        gh = GOOD_TOML.replace('project_id = "p1"', 'project_id = "none"').replace('"linear"', '"github"')
+        self.assertNotIn("project.project_id", self.msgs(self.check({"skill_router.toml": gh})))
+
     def test_invalid_prefix(self):
         for bad in ["N/A", "NA", "A B", ""]:
             r = self.check({"skill_router.toml": GOOD_TOML.replace('"HL"', '"%s"' % bad)})
