@@ -367,6 +367,7 @@ class ExpansionAndClusterTests(PolicyCase):
     def test_deny_uniq_arg_after_first_operand(self):
         self.deny("uniq in -out")
         self.deny("cat in | uniq - -out")
+        self.deny("uniq in '' out")
 
     def test_allow_uniq_value_flags_before_operand(self):
         self.allow("uniq -c -f 1 -s 2 in")

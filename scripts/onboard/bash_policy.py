@@ -143,7 +143,7 @@ def _uniq_extra_arg(args: List[str]) -> str:
         if arg == "--" and not after_dashdash:
             after_dashdash = True
         elif after_dashdash or arg == "-" or not arg.startswith("-"):
-            return args[i + 1] if i + 1 < len(args) else ""
+            return repr(args[i + 1]) if i + 1 < len(args) else ""
         elif arg in UNIQ_VALUE_FLAGS:
             i += 1
         i += 1
