@@ -168,14 +168,30 @@ def _tracked_files(root: Path) -> List[str]:
     return [f for f in out.split("\0") if f]
 
 
-def _untracked_problem(root: Path) -> Optional[str]:
-    """check and apply only see tracked files, so a bare `git init` (nothing tracked) would pass vacuously."""
+def _untracked_problem(root: Path, scan_content: bool = True) -> Optional[str]:
+    """check and apply only see tracked files, so untracked ones must not let a project pass vacuously.
+
+    Three cases: nothing tracked (bare `git init`); a required file untracked; any other untracked, non-ignored
+    scanned file that still holds a placeholder (a retrofit where only some files were `git add`-ed).
+    """
     tracked = set(_tracked_files(root))
     if not tracked:
         return "no files are tracked by git: run `git add -A && git commit -m 'Initial import'` first"
     loose = [rel for rel in ARTIFACTS + ["skill_router.toml"] if (root / rel).exists() and rel not in tracked]
     if loose:
-        return "not tracked by git (run `git add -A`): %s" % ", ".join(loose)
+        return "not tracked by git (git add them): %s" % ", ".join(loose)
+    if scan_content:
+        out = _git(root, "-c", "core.quotePath=false", "ls-files", "-z", "--others", "--exclude-standard")
+        dirty = []
+        for rel in sorted(f for f in out.split("\0") if f and _scanned(f)):
+            try:
+                text = _read_regular(root / rel)
+            except (UnicodeDecodeError, OSError):
+                continue
+            if PLACEHOLDER_RE.search(text or ""):
+                dirty.append(rel)
+        if dirty:
+            return "untracked files with {{...}} placeholders (git add and commit them): %s" % ", ".join(dirty)
     return None
 
 
@@ -319,7 +335,7 @@ def check(root: Path) -> Dict[str, Any]:
     """In template mode (YAB itself) unfilled placeholders, template artifacts and empty config are expected."""
     errors: List[str] = []
     template_mode = _template_mode(root, errors)
-    untracked = _untracked_problem(root)
+    untracked = _untracked_problem(root, scan_content=not template_mode)
     if untracked:
         errors.append(untracked)
     warnings: List[str] = []
