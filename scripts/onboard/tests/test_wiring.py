@@ -18,6 +18,8 @@ import unittest
 from pathlib import Path
 
 from scripts.onboard import onboard
+from scripts.onboard.tests import YAB_REPOSITORY, template_only, template_state_expected
+from scripts.onboard.tests.test_onboard import YAB_SENTINEL
 
 ROOT = Path(__file__).resolve().parents[3]
 SETTINGS = ROOT / ".claude" / "settings.json"
@@ -73,6 +75,7 @@ class SettingsWiringTests(unittest.TestCase):
 
 
 class SentinelTests(unittest.TestCase):
+    @template_only
     def test_committed_sentinel_names_yab(self):
         text = (ROOT / ".yab-template").read_text(encoding="utf-8")
         fields = dict(ln.split("=", 1) for ln in text.splitlines() if "=" in ln)
@@ -82,12 +85,30 @@ class SentinelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             subprocess.run(["git", "-C", tmp, "init", "-q"], check=True)
             subprocess.run(["git", "-C", tmp, "remote", "add", "origin", origin], check=True)
-            (Path(tmp) / ".yab-template").write_bytes((ROOT / ".yab-template").read_bytes())
+            (Path(tmp) / ".yab-template").write_text(YAB_SENTINEL, encoding="utf-8")
             return onboard._template_mode(Path(tmp), [])
 
     def test_template_mode_only_with_yab_origin(self):
         self.assertTrue(self._mode("https://github.com/%s.git" % onboard.YAB_REPO))
         self.assertFalse(self._mode("https://github.com/someone/else.git"))
+
+
+class TemplateGuardTests(unittest.TestCase):
+    def _expected(self, sentinel, env):
+        with tempfile.TemporaryDirectory() as tmp:
+            if sentinel:
+                (Path(tmp) / ".yab-template").write_text(YAB_SENTINEL, encoding="utf-8")
+            return template_state_expected(Path(tmp), env)
+
+    def test_sentinel_present_runs_template_tests(self):
+        self.assertTrue(self._expected(True, {}))
+
+    def test_onboarded_repo_outside_yab_ci_skips(self):
+        self.assertFalse(self._expected(False, {}))
+        self.assertFalse(self._expected(False, {"GITHUB_REPOSITORY": "someone/else"}))
+
+    def test_missing_sentinel_in_yab_ci_does_not_skip(self):
+        self.assertTrue(self._expected(False, {"GITHUB_REPOSITORY": YAB_REPOSITORY}))
 
 
 if __name__ == "__main__":
