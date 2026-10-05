@@ -50,6 +50,8 @@ Run `probe` with plain `python3`. Note `pythons_with_tomllib` (if empty, stop an
 
 ### 2. Detect the mode
 
+Claude must be launched from the repo root: project hooks are read only from the launch directory, so a session started in a subdirectory is not gated. If the gate denies everything with "not a git repository", the project has no `.git` (e.g. a ZIP download): the user runs git init in their own terminal window in the project root, then restarts Claude there and runs `/onboard`.
+
 Run `check` (exit 1 is normal here; read its JSON). State table:
 
 | `.yab-template` | origin | Answer | `check` says | Do |
@@ -63,7 +65,7 @@ When `template_mode` is true, ask: "(a) maintaining YAB itself, or (b) a fresh p
 
 For both human steps, first get the absolute repo root with `git rev-parse --show-toplevel` and the interpreter from probe's `pythons_with_tomllib`, and print the command as one ready-to-paste line with both filled in (a new terminal window opens in the home directory, not the repo).
 
-Human step A (new project): ask the user to open a separate terminal window and paste `cd <absolute repo root> && git remote set-url origin <their repo URL>`, then say "done"; re-run check afterwards. The gate blocks it for you.
+Human step A (new project): ask the user to open a separate terminal window and paste `cd <absolute repo root> && git remote set-url origin <their repo URL>` (or, if they have no remote repository yet, `cd <absolute repo root> && git remote remove origin`; origin then counts as none, the adopter row below), then say "done"; re-run check afterwards. The gate blocks it for you.
 Human step B (YAB fork for maintenance): ask the user to open a separate terminal window and paste `cd <absolute repo root> && <interpreter> scripts/onboard/onboard.py mark --force` (it needs an interactive terminal), then say "done". Then verify the marker (below) and stop: do not run check or apply again, and do not go on to later steps.
 
 To verify the marker after step B, run `git rev-parse --git-common-dir`, then `ls <git-common-dir>/yab/onboarded` with that output in place of the placeholder. If it is missing, ask the user to repeat step B.
