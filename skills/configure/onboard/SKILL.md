@@ -50,7 +50,7 @@ Run `probe` with plain `python3`. Note `pythons_with_tomllib` (if empty, stop an
 
 ### 2. Detect the mode
 
-Claude must be launched from the repo root: project hooks are read only from the launch directory, so a session started in a subdirectory is not gated. If the gate denies everything with "not a git repository", the project has no `.git` (e.g. a ZIP download): the user runs git init in their own terminal window in the project root, then restarts Claude there and runs `/onboard`.
+Claude must be launched from the repo root: project hooks are read only from the launch directory, so a session started in a subdirectory is not gated.
 
 Run `check` (exit 1 is normal here; read its JSON). State table:
 
@@ -65,7 +65,7 @@ When `template_mode` is true, ask: "(a) maintaining YAB itself, or (b) a fresh p
 
 For both human steps, first get the absolute repo root with `git rev-parse --show-toplevel` and the interpreter from probe's `pythons_with_tomllib`, and print the command as one ready-to-paste line with both filled in (a new terminal window opens in the home directory, not the repo).
 
-Human step A (new project): ask the user to open a separate terminal window and paste `cd <absolute repo root> && git remote set-url origin <their repo URL>` (or, if they have no remote repository yet, `cd <absolute repo root> && git remote remove origin`; origin then counts as none, the adopter row below), then say "done"; re-run check afterwards. The gate blocks it for you.
+Human step A (new project): ask the user to open a separate terminal window and paste `cd <absolute repo root> && git remote set-url origin <their repo URL>` (or, if they have no remote repository yet, `cd <absolute repo root> && git remote remove origin`; origin then counts as none, the adopter row below), then say "done"; re-run check afterwards. The gate blocks it for you. With no origin, GitHub Issues as the PM tool cannot work until the user connects an origin later (a remote named origin pointing at their repository).
 Human step B (YAB fork for maintenance): ask the user to open a separate terminal window and paste `cd <absolute repo root> && <interpreter> scripts/onboard/onboard.py mark --force` (it needs an interactive terminal), then say "done". Then verify the marker (below) and stop: do not run check or apply again, and do not go on to later steps.
 
 To verify the marker after step B, run `git rev-parse --git-common-dir`, then `ls <git-common-dir>/yab/onboarded` with that output in place of the placeholder. If it is missing, ask the user to repeat step B.
@@ -99,7 +99,7 @@ ai_commit_trailer ai_tool_credit test_command integration_test_dir test_harness_
 version_file version_field in_qa_paths
 -->
 
-Proposed defaults: `ai_commit_trailer` is the current agent's trailer line (for Claude, its `Co-Authored-By:` line from the session); `ai_tool_credit` is the matching credit line (for Claude Code, the "Generated with Claude Code" line with its link); `git_host` is the host of `origin`; `pm_project_url` is the Linear project URL, or the repo's `/issues` URL for GitHub Issues. For `integration_test_dir`, `test_harness_file`, `test_harness_class`, `version_file`, `version_field` and `in_qa_paths`, use what the repo really has; when it has none, use a phrase that reads correctly in the table, e.g. `none (no integration test harness)` or `none (no version file)`. `project_id` is a real id when `pm` is `"linear"`, else `none`; `available_models` is a comma-separated list and is what step 7 maps; `keep_licence` is `true` or `false` and `false` makes `apply` drop `LICENSE`.
+Proposed defaults: `ai_commit_trailer` is the current agent's trailer line (for Claude, its `Co-Authored-By:` line from the session); `ai_tool_credit` is the matching credit line (for Claude Code, the "Generated with Claude Code" line with its link); `git_host` is the host of `origin` (with no origin, ask for `git_host` and `pm_project_url` instead of proposing them); `pm_project_url` is the Linear project URL, or the repo's `/issues` URL for GitHub Issues. For `integration_test_dir`, `test_harness_file`, `test_harness_class`, `version_file`, `version_field` and `in_qa_paths`, use what the repo really has; when it has none, use a phrase that reads correctly in the table, e.g. `none (no integration test harness)` or `none (no version file)`. `project_id` is a real id when `pm` is `"linear"`, else `none`; `available_models` is a comma-separated list and is what step 7 maps; `keep_licence` is `true` or `false` and `false` makes `apply` drop `LICENSE`.
 
 ### 4. Apply
 
