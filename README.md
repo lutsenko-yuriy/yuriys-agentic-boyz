@@ -2,33 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A GitHub template repository that bootstraps a **multi-skill AI workflow** with your choice of project management tool (Linear, Jira, GitHub Issues, etc.) and Git host (GitHub, GitLab, Bitbucket) for any new project in minutes.
-
-## What's included
-
-| File | Purpose |
-|---|---|
-| `skills/configure/calibrate/SKILL.md` | One-time setup: propose and approve the model → tier mapping |
-| `skills/configure/style/SKILL.md` | Switch communication style: DETAILED, CONCISE, or SCHEMATIC |
-| `skills/manage/summarize/SKILL.md` | Session-start: fetch and display the backlog |
-| `skills/manage/ship/SKILL.md` | Post-merge housekeeping: close issues, update docs, bump version, merge |
-| `skills/design/analyze/SKILL.md` | Analytics planning: identify events and screen views for a feature |
-| `skills/design/experiment/SKILL.md` | Experiment design: hypothesis, metrics, variant spec, registry entry |
-| `skills/design/plan/SKILL.md` | Implementation planning: structured plan from a PM issue |
-| `skills/build/implement/SKILL.md` | TDD implementation and PR/MR |
-| `skills/verify/review/SKILL.md` | Architectural PR/MR review |
-| `skills/verify/audit/SKILL.md` | Runtime and migration PR/MR review |
-| `styles/DETAILED.md` | Style def: full prose, default |
-| `styles/CONCISE.md` | Style def: lecture-note shorthand, abbreviation-friendly |
-| `styles/SCHEMATIC.md` | Style def: TeX-math + Haskell notation |
-| `CLAUDE.md` | Orchestrator file: session start, workflow steps, branch naming, review chain |
-| `docs/PRODUCT_SPEC.md` | Blank product spec template |
-| `docs/ARCHITECTURE.md` | Blank architecture doc template |
-| `docs/BACKLOG.md` | Generated from your PM tool — do not edit by hand |
-| `docs/CHANGELOG.md` | Maintained by the `ship` skill after each merged PR/MR |
-| `docs/VERSIONING.md` | Versioning strategy template |
-| `docs/MODEL_TIERS.md` | Effort Tier + Reasoning Depth vocabulary; active model → tier mapping |
-| `setup.sh` | Interactive setup script — substitutes `{{PLACEHOLDERS}}` throughout |
+A GitHub template that bootstraps a **multi-skill AI workflow** (Linear or GitHub Issues for PM, GitHub as the Git host) for a new project.
 
 ## Skill workflow
 
@@ -46,88 +20,56 @@ User-facing feature
 
 ## Quick start
 
-### 1. Create a new repo from this template
+**Requires:** `git` and `python3` (3.11+ for onboarding's `check`/`apply`/`mark`), plus an authenticated `gh` if you use GitHub. Without `python3` the gate denies every tool call, and `/onboard` cannot fix that.
 
-Click **"Use this template"** → **"Create a new repository"** on GitHub.
+1. Click **Use this template** on GitHub, then clone your new repo.
+2. Open Claude Code **from the repo root**, then run `/onboard`.
 
-### 2. Clone your new repo
+> **Launch from the repo root.** Claude Code reads the project `.claude/settings.json` only from the directory it starts in. Started from a subdirectory, the gate hooks do not load and the gate does not run.
 
-```bash
-git clone https://github.com/<you>/<your-project>.git
-cd <your-project>
-```
+## Onboarding
 
-### 3. Run the setup script
+Until onboarding finishes, a gate (hooks in `.claude/settings.json`, `scripts/onboard/gate.py`) blocks writes outside a short allowlist, other skills, subagents, and most shell commands. `/onboard` runs inline and works within it.
 
-```bash
-chmod +x setup.sh
-./setup.sh
-```
+It probes your machine, infers the stack from the repo, asks only what it cannot infer, and produces:
 
-The script will prompt for:
-- Project name and description
-- Tech stack and architecture summary
-- PM tool name (Linear, Jira, GitHub Issues, etc.) and issue prefix
-- Git host (GitHub, GitLab, Bitbucket)
-- Available AI models (comma-separated — used by `calibrate`)
-- Experiment tracking tool
-- AI commit trailer and PR/MR credit lines
+- `skill_router.toml` `[project]` (name, issue prefix, git host, test command, and so on) and `[providers].pm` (`linear` or `github`)
+- `docs/TECH_STACK.md`, `docs/CODE_STYLE.md`, `docs/CONSTRAINTS.md`
+- `docs/ARCHITECTURE.md`, the Common Commands in `AGENTS.md`, and the model tier mapping in `docs/MODEL_TIERS.md`
+- optionally a gitignored `CLAUDE.local.md` with per-machine settings
 
-All `{{PLACEHOLDER}}` values across every file are substituted in one step.
+`onboard.py apply` then fills the `[project]` values into the template placeholders in tracked files (except `scripts/onboard/`, `docs/knowledge/` and `docs/CHANGELOG.md`; re-running is safe), reconciles `.mcp.json` with your PM tool, deletes `LICENSE` if `keep_licence = false`, and removes the `.yab-template` sentinel. `onboard.py check` reports what is left; `onboard.py mark` refuses until it is clean.
 
-### 4. Finish manual setup
+### Steps you do yourself
 
-After `setup.sh`:
+The gate blocks these for the agent, so `/onboard` prints a ready-to-paste command and waits for "done":
 
-1. **`CLAUDE.md` — Common Commands**: fill in the test, lint, build, and install commands for your stack.
-2. **`docs/PRODUCT_SPEC.md`**: describe your features from the user's perspective.
-3. **`docs/ARCHITECTURE.md`**: add your directory tree and layer rules.
-4. **`CLAUDE.local.md`** *(not committed)*: add local binary paths, PM tool auth notes, and any machine-specific config.
+- **Template origin:** if `origin` still points at this template, repoint it (`git remote set-url origin <your repo>`) or remove it.
+- **Untracked files with placeholders:** `git add` them (staging is enough, no commit needed).
+- **No git repo yet:** `git init` and make a first commit.
+- **Maintaining a YAB fork:** `onboard.py mark --force`, from an interactive terminal.
 
-### 5. Map your models to tiers
+### The onboarded marker
 
-Invoke the `calibrate` skill:
+`mark` writes `yab/onboarded` inside the clone's git common dir (`git rev-parse --git-common-dir`). It is per clone and never committed, so each collaborator runs `/onboard` once; in an already-configured repo it only gives a short orientation and marks. Worktrees of one clone share it. Once present, the gate steps aside.
 
-```
-Invoke the calibrate skill
-```
+After onboarding, commit and push the result before collaborators clone; otherwise their `/onboard` runs the full configuration again. Then start with `/summarize`.
 
-This skill uses **THOROUGH + ARCHITECTURAL** reasoning (your most capable model) to read the model list you provided, characterise each model's strengths, and propose which model should handle each Effort Tier + Reasoning Depth combination. Review and approve the proposal — it gets written into `docs/MODEL_TIERS.md` as the **Active mapping**.
+## What's included
 
-Re-run `calibrate` any time your available models change.
-
-### 6. Authenticate your PM tool MCP (if applicable)
-
-If your PM tool has an MCP server (e.g. Linear), open Claude Code in your project directory and run `/mcp` to authenticate. See `CLAUDE.local.md` for notes.
-
-### 7. Start your first session
-
-The `CLAUDE.md` session-start instructions will automatically invoke the `summarize` skill, which will present an empty backlog and ask: **"What goes into the first release?"**
-
-## Placeholders reference
-
-| Placeholder | Example value |
-|---|---|
-| `{{PROJECT_NAME}}` | `My App` |
-| `{{PROJECT_DESCRIPTION}}` | `A task manager for remote teams` |
-| Stack | filled in `docs/TECH_STACK.md` by `/onboard` |
-| `{{ARCHITECTURE_SUMMARY}}` | `Vertical-slice with Riverpod + sqflite` |
-| Code style | filled in `docs/CODE_STYLE.md` by `/onboard` |
-| `{{PM_TOOL}}` | `Linear` |
-| `{{ISSUE_PREFIX}}` | `APP` |
-| `{{PM_PROJECT_URL}}` | `https://linear.app/my-workspace/project/...` |
-| `{{GIT_HOST}}` | `GitHub` |
-| `{{EXPERIMENT_TOOL}}` | `Firebase A/B Testing` |
-| `{{AVAILABLE_MODELS}}` | `gpt-4o, gpt-4o-mini` |
-| `{{AI_COMMIT_TRAILER}}` | `Co-Authored-By: AI Assistant <ai@example.com>` |
-| `{{AI_TOOL_CREDIT}}` | `🤖 Generated with Claude Code` |
+- `skills/`: `configure` (onboard, calibrate, style, skill-creator, migrate-provider), `design` (brief, analyze, plan, research, experiment), `build` (implement), `verify` (review, audit, draft-scenarios), `manage` (summarize, ship, debrief, note, checkup)
+- `.claude/commands/`: one slash-command stub per skill
+- `styles/`: DETAILED, CONCISE, SCHEMATIC communication styles
+- `scripts/onboard/`: onboarding helper, gate hooks and tests
+- `AGENTS.md` / `CLAUDE.md`: orchestrator instructions, session start, workflow
+- `docs/`: spec, architecture, tech stack, code style, constraints, backlog, changelog, versioning, model tiers
 
 ## Notes
 
-- **`.claude/skills/` is committed** — skills are part of the project workflow. If you want them local-only, add `.claude/skills/` to `.gitignore` after setup.
-- **No external PM tool required** — leave the PM tool blank during `setup.sh` and the template defaults to your Git host's built-in issue tracker (GitHub Issues, GitLab Issues, etc.). No MCP, no extra auth, no configuration. Add an external tool later if the project outgrows it.
+- **`skills/` is committed** — skills are part of the project workflow; command stubs live in `.claude/commands/`.
+- **No external PM tool required** — choose `github` as `[providers].pm` during `/onboard` to use GitHub Issues. It uses the `gh` CLI (`gh auth login`); no MCP.
 - **PM tool auth is per-developer** — when using an external PM tool with an MCP server (e.g. Linear), each team member authenticates independently. No secrets are stored in the repo.
 - **`CLAUDE.local.md` is gitignored** — put machine-specific paths and personal notes there.
-- **Tool-agnostic by design** — skills describe what to do with multi-tool example tables (Linear/Jira/GitHub Issues/GitLab Issues, GitHub/GitLab/Bitbucket). Specific commands depend on your configured tools.
+- **Tool-agnostic by design** — skills describe what to do per PM tool (Linear or GitHub Issues, set by `[providers].pm`); the Git host is GitHub.
 - **Model-agnostic by design** — skills declare `effort` and `reasoning` tiers instead of model names. The `calibrate` skill maps your available models to those tiers once, and the active mapping lives in `docs/MODEL_TIERS.md`.
 - **Communication styles** — the `style` skill switches between DETAILED (full prose), CONCISE (lecture-note shorthand), and SCHEMATIC (TeX-like notation). Active style persists across sessions via `CLAUDE.local.md`.

@@ -190,7 +190,7 @@ class ConfigAgreementTest(unittest.TestCase):
 
     def test_none_is_only_allowed_where_no_consumer_pastes_it(self):
         # Every consumer of a none-ok key's placeholder must be a file where `none` reads naturally.
-        harmless = {"docs/experiments/README.md", "README.md"}  # README: placeholders table wording, WU8
+        harmless = {"docs/experiments/README.md"}
         none_ok = set((block("none-ok", SKILL.read_text(encoding="utf-8")) or "").split())
         out = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True, text=True).stdout
         for key in sorted(none_ok):
