@@ -387,9 +387,10 @@ class TemplateFlowTest(unittest.TestCase):
     def test_human_only_commands_run_in_a_separate_terminal_not_via_bang(self):
         text = text_of(skill_files())
         human = human_commands(text)
-        self.assertEqual(3, len(human))
+        self.assertEqual(4, len(human))
         self.assertTrue(any("&& git remote set-url origin" in c for c in human))
         self.assertTrue(any(c.endswith("&& git remote remove origin") for c in human))
+        self.assertTrue(any("&& git add <the files it listed>" in c for c in human))
         self.assertTrue(any(c.endswith("onboard.py mark --force") for c in human))
         for c in human:
             # A new terminal opens in ~: the line must cd to the repo root and use the interpreter probe found.
