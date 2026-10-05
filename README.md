@@ -64,7 +64,7 @@ After onboarding, start with `/summarize`.
 
 ## Notes
 
-- **`.claude/skills/` is committed** — skills are part of the project workflow. If you want them local-only, add `.claude/skills/` to `.gitignore` after onboarding.
+- **`skills/` is committed** — skills are part of the project workflow; command stubs live in `.claude/commands/`.
 - **No external PM tool required** — choose `github` as `[providers].pm` during `/onboard` to use GitHub Issues. No MCP, no extra auth.
 - **PM tool auth is per-developer** — when using an external PM tool with an MCP server (e.g. Linear), each team member authenticates independently. No secrets are stored in the repo.
 - **`CLAUDE.local.md` is gitignored** — put machine-specific paths and personal notes there.
