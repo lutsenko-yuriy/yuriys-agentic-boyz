@@ -27,6 +27,9 @@ readOnlyHint). Mitigated because the agent cannot add MCP servers while gated.
 Wired in the committed .claude/settings.json (each row `"timeout": 5`; command is gate.sh with the event as argv[1]):
     SessionStart (matcher startup), UserPromptExpansion, PreToolUse (no matcher)
 
+Known residual: project settings are only read from the launch directory, so launching Claude from a subdirectory
+of the repo skips the gate entirely; launch Claude from the repo root.
+
 Known residual: whether PreToolUse fires for user `!` shell commands is not relied on; the human-only steps in
 /onboard use a separate terminal.
 """
@@ -69,6 +72,9 @@ BLOCK_EXIT = 10
 GIT_TIMEOUT = 2
 
 OK = (0, "", "")
+
+NOT_A_REPO = "not a git repository"
+NO_REPO_HINT = "not a git repository - run `git init` in a separate terminal in the project root, then /onboard"
 
 
 def _deny(reason: str) -> Result:
@@ -185,7 +191,12 @@ def run(stdin_text: str, fallback_event: Optional[str] = None) -> Result:
             data = {}
         else:
             event = data.get("hook_event_name") if isinstance(data.get("hook_event_name"), str) else event
-        root = _find_root(data)
+        try:
+            root = _find_root(data)
+        except onboard.OnboardError as exc:
+            if event == "PreToolUse" and NOT_A_REPO in str(exc):
+                return _deny(NO_REPO_HINT)
+            raise
         if is_onboarded(root):
             return OK
         if not data:
