@@ -63,7 +63,7 @@ Run `check` (exit 1 is normal here; read its JSON). State table:
 
 When `template_mode` is true, ask: "(a) maintaining YAB itself, or (b) a fresh project created from the template?"
 
-For both human steps, first get the absolute repo root with `git rev-parse --show-toplevel` and the interpreter from probe's `pythons_with_tomllib`, and print the command as one ready-to-paste line with both filled in (a new terminal window opens in the home directory, not the repo).
+For each human step, first get the absolute repo root with `git rev-parse --show-toplevel` and the interpreter from probe's `pythons_with_tomllib`, and print the command as one ready-to-paste line with both filled in (a new terminal window opens in the home directory, not the repo).
 
 Human step A (new project): ask the user to open a separate terminal window and paste `cd <absolute repo root> && git remote set-url origin <their repo URL>` (or, if they have no remote repository yet, `cd <absolute repo root> && git remote remove origin`; origin then counts as none, the adopter row below), then say "done"; re-run check afterwards. The gate blocks it for you. With no origin, GitHub Issues as the PM tool cannot work until the user connects an origin later (a remote named origin pointing at their repository).
 Human step C (untracked files with placeholders): when check or apply reports untracked files with placeholders, ask the user to open a separate terminal window and paste `cd <absolute repo root> && git add <the files it listed>`, then say "done"; staging is enough, no commit is needed. Re-run check (and apply) afterwards. The gate blocks it for you.
