@@ -20,6 +20,8 @@ User-facing feature
 
 ## Quick start
 
+**Requires:** `git` and `python3` (3.11+ for onboarding's `check`/`apply`/`mark`), plus an authenticated `gh` if you use GitHub. Without `python3` the gate denies every tool call, and `/onboard` cannot fix that.
+
 1. Click **Use this template** on GitHub, then clone your new repo.
 2. Open Claude Code **from the repo root**, then run `/onboard`.
 
@@ -36,7 +38,7 @@ It probes your machine, infers the stack from the repo, asks only what it cannot
 - `docs/ARCHITECTURE.md`, the Common Commands in `AGENTS.md`, and the model tier mapping in `docs/MODEL_TIERS.md`
 - optionally a gitignored `CLAUDE.local.md` with per-machine settings
 
-`onboard.py apply` then fills the `[project]` values into the template placeholders in every tracked file (re-running is safe), reconciles `.mcp.json` with your PM tool, and removes the `.yab-template` sentinel. `onboard.py check` reports what is left; `onboard.py mark` refuses until it is clean.
+`onboard.py apply` then fills the `[project]` values into the template placeholders in tracked files (except `scripts/onboard/`, `docs/knowledge/` and `docs/CHANGELOG.md`; re-running is safe), reconciles `.mcp.json` with your PM tool, deletes `LICENSE` if `keep_licence = false`, and removes the `.yab-template` sentinel. `onboard.py check` reports what is left; `onboard.py mark` refuses until it is clean.
 
 ### Steps you do yourself
 
@@ -51,7 +53,7 @@ The gate blocks these for the agent, so `/onboard` prints a ready-to-paste comma
 
 `mark` writes `yab/onboarded` inside the clone's git common dir (`git rev-parse --git-common-dir`). It is per clone and never committed, so each collaborator runs `/onboard` once; in an already-configured repo it only gives a short orientation and marks. Worktrees of one clone share it. Once present, the gate steps aside.
 
-After onboarding, start with `/summarize`.
+After onboarding, commit and push the result before collaborators clone; otherwise their `/onboard` runs the full configuration again. Then start with `/summarize`.
 
 ## What's included
 
@@ -65,9 +67,9 @@ After onboarding, start with `/summarize`.
 ## Notes
 
 - **`skills/` is committed** — skills are part of the project workflow; command stubs live in `.claude/commands/`.
-- **No external PM tool required** — choose `github` as `[providers].pm` during `/onboard` to use GitHub Issues. No MCP, no extra auth.
+- **No external PM tool required** — choose `github` as `[providers].pm` during `/onboard` to use GitHub Issues. It uses the `gh` CLI (`gh auth login`); no MCP.
 - **PM tool auth is per-developer** — when using an external PM tool with an MCP server (e.g. Linear), each team member authenticates independently. No secrets are stored in the repo.
 - **`CLAUDE.local.md` is gitignored** — put machine-specific paths and personal notes there.
-- **Tool-agnostic by design** — skills describe what to do with multi-tool example tables (Linear/Jira/GitHub Issues/GitLab Issues, GitHub/GitLab/Bitbucket). Specific commands depend on your configured tools.
+- **Tool-agnostic by design** — skills describe what to do per PM tool (Linear or GitHub Issues, set by `[providers].pm`); the Git host is GitHub.
 - **Model-agnostic by design** — skills declare `effort` and `reasoning` tiers instead of model names. The `calibrate` skill maps your available models to those tiers once, and the active mapping lives in `docs/MODEL_TIERS.md`.
 - **Communication styles** — the `style` skill switches between DETAILED (full prose), CONCISE (lecture-note shorthand), and SCHEMATIC (TeX-like notation). Active style persists across sessions via `CLAUDE.local.md`.

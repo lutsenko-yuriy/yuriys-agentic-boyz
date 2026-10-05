@@ -75,7 +75,7 @@ Never run `git remote` yourself, touch the template sentinel yourself, or force 
 
 ### 3. Collect project config
 
-Read `README.md`, the manifests and `git log --oneline -20` first and propose answers; ask only what cannot be inferred. Then Edit `skill_router.toml`:
+Read `README.md` (unless it is still the YAB template README, titled "Multi-Agent Project Template": then do not infer the name or description from it, ask the user), the manifests and `git log --oneline -20` first and propose answers; ask only what cannot be inferred. Then Edit `skill_router.toml`:
 
 - `[providers].pm`: exactly `"linear"` or `"github"` (GitHub Issues). It is mandatory and the only record of the PM tool. If the choice is Linear, check the Linear MCP is authenticated (ask the user to run `/mcp` if the read tools are unavailable) and look up the team and project with `mcp__linear__list_teams` and `mcp__linear__list_projects`.
 - `[project]`: supply these keys. Prefix rule: letters and digits, 2-10 characters, starting with a letter, not `N/A`; default is the initials of a multi-word name, the capital letters of a CamelCase name, or the first 3 letters otherwise.
@@ -135,4 +135,4 @@ If the probe found tools the user will need (an interpreter path, a Flutter bina
 
 Run `check`. If `ok` is false, fix every error it lists (for untracked files with placeholders, Human step C in step 2) (and re-run `apply` if the config changed) until it is clean; surface warnings. Then run `mark`: it refuses unless `check` is clean, and forcing the marker is for the human only.
 
-Then give the one-screen orientation per `@skills/configure/onboard/resources/orientation.md`, offer one optional Q&A turn, and hand off: the next step is the `summarize` skill (`/summarize`). In the already-configured path of step 2 the orientation is all there is.
+Then give the one-screen orientation per `@skills/configure/onboard/resources/orientation.md`, offer one optional Q&A turn, and hand off: the next step is the `summarize` skill (`/summarize`). Remind the user to commit and push the onboarding result before collaborators clone. In the already-configured path of step 2 the orientation is all there is.
