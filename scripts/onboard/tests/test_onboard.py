@@ -651,29 +651,32 @@ def done(text):
     return re.sub(r"<[a-z][^<>\n]*>", "x", text)
 
 
-@template_only
 @needs_toml
 class ShippedTemplateTests(unittest.TestCase):
     def check(self, files):
         with tempfile.TemporaryDirectory() as tmp:
             return onboard.check(make_repo(tmp, files))
 
+    @template_only
     def test_every_artifact_template_ships_with_marker(self):
         for rel in onboard.ARTIFACTS:
             with self.subTest(rel):
                 self.assertTrue(shipped(rel).startswith(MARKER))
 
+    @template_only
     def test_marker_comment_describes_actual_check_wording(self):
         for rel in onboard.ARTIFACTS:
             with self.subTest(rel):
                 self.assertIn("reports it as still a template", shipped(rel))
                 self.assertNotIn("as missing", shipped(rel))
 
+    @template_only
     def test_fresh_templates_reported_missing(self):
         r = self.check({rel: shipped(rel) for rel in onboard.ARTIFACTS})
         for rel in onboard.ARTIFACTS:
             self.assertIn("%s is still a template" % rel, r["errors"])
 
+    @template_only
     def test_filled_examples_pass_with_base_standard_cross_check(self):
         tech = filled("docs/TECH_STACK.md").replace(
             "| <language> | <version> | <e.g. application code, scripts> |", "| Rust | 1.80 | services |\n| Kotlin | 2.0 | apps |"
@@ -684,6 +687,7 @@ class ShippedTemplateTests(unittest.TestCase):
         r = self.check({"docs/TECH_STACK.md": done(tech), "docs/CODE_STYLE.md": done(style), "docs/CONSTRAINTS.md": done(filled("docs/CONSTRAINTS.md"))})
         self.assertTrue(r["ok"], r)
 
+    @template_only
     def test_filled_examples_fail_when_base_standard_misses_a_language(self):
         tech = filled("docs/TECH_STACK.md").replace(
             "| <language> | <version> | <e.g. application code, scripts> |", "| Python | 3.12 | scripts |\n| Go | 1.22 | tools |"
@@ -692,12 +696,14 @@ class ShippedTemplateTests(unittest.TestCase):
         r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
         self.assertIn("CODE_STYLE Base standard does not cover TECH_STACK language Go", r["errors"])
 
+    @template_only
     def test_marker_removed_but_tokens_left_fails_check(self):
         files = {rel: filled(rel) for rel in onboard.ARTIFACTS}
         r = self.check(files)
         for rel in onboard.ARTIFACTS:
             self.assertTrue(any(rel in e and "<...>" in e for e in r["errors"]), (rel, r["errors"]))
 
+    @template_only
     def test_template_tokens_match_shipped_templates(self):
         found = set()
         for rel in onboard.ARTIFACTS:
@@ -708,6 +714,9 @@ class ShippedTemplateTests(unittest.TestCase):
         body = ("# Doc\n\nTag `v<version>` and ``Run `./tool <tool>` `` here.\n\n```\nx <language>\n```\n\n"
                 "~~~\ny <service>\n~~~\n")
         self.assertTrue(self.check({"docs/CONSTRAINTS.md": body})["ok"])
+
+    @template_only
+    def test_unfilled_templates_still_fail_when_code_tokens_are_ignored(self):
         r = self.check({rel: filled(rel) for rel in onboard.ARTIFACTS})
         self.assertFalse(r["ok"])
 
@@ -717,6 +726,7 @@ class ShippedTemplateTests(unittest.TestCase):
         r = self.check({"docs/CONSTRAINTS.md": body})
         self.assertTrue(r["ok"], r)
 
+    @template_only
     def test_mentions_inside_html_comments_do_not_count(self):
         tech = filled("docs/TECH_STACK.md").replace(
             "| <language> | <version> | <e.g. application code, scripts> |", "| Rust | 1.80 | services |"
@@ -725,6 +735,7 @@ class ShippedTemplateTests(unittest.TestCase):
         r = self.check({"docs/TECH_STACK.md": tech, "docs/CODE_STYLE.md": style, "docs/CONSTRAINTS.md": filled("docs/CONSTRAINTS.md")})
         self.assertIn("CODE_STYLE Base standard does not cover TECH_STACK language Rust", r["errors"])
 
+    @template_only
     def test_template_comment_example_languages_do_not_count(self):
         tech = filled("docs/TECH_STACK.md").replace(
             "| <language> | <version> | <e.g. application code, scripts> |", "| Python | 3 | x |"
