@@ -710,7 +710,7 @@ class PlaceholderCoverageTests(unittest.TestCase):
         tracked = git(REPO_ROOT, "ls-files").splitlines()
         stranded = []
         for rel in tracked:
-            if rel == "README.md" or not onboard._scanned(rel) or rel in gate.BOOTSTRAP_PATHS:
+            if not onboard._scanned(rel) or rel in gate.BOOTSTRAP_PATHS:
                 continue
             text = onboard._read_regular(REPO_ROOT / rel) or ""
             stranded += ["%s %s" % (rel, m) for m in onboard.PLACEHOLDER_RE.findall(text) if m[2:-2] not in fillable]
