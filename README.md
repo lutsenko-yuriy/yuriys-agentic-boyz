@@ -110,9 +110,9 @@ The `CLAUDE.md` session-start instructions will automatically invoke the `summar
 |---|---|
 | `{{PROJECT_NAME}}` | `My App` |
 | `{{PROJECT_DESCRIPTION}}` | `A task manager for remote teams` |
-| `{{STACK}}` | `Flutter/Dart` |
+| Stack | filled in `docs/TECH_STACK.md` by `/onboard` |
 | `{{ARCHITECTURE_SUMMARY}}` | `Vertical-slice with Riverpod + sqflite` |
-| `{{CODE_STYLE}}` | `Flutter style guide` |
+| Code style | filled in `docs/CODE_STYLE.md` by `/onboard` |
 | `{{PM_TOOL}}` | `Linear` |
 | `{{ISSUE_PREFIX}}` | `APP` |
 | `{{PM_PROJECT_URL}}` | `https://linear.app/my-workspace/project/...` |

@@ -185,6 +185,35 @@ class CheckTests(unittest.TestCase):
     def msgs(self, result, key="errors"):
         return " | ".join(result[key])
 
+    def bare_init(self, tmp):
+        """A ZIP-style copy after a bare `git init`: files on disk, nothing tracked."""
+        root = make_repo(tmp)
+        git(root, "rm", "-r", "-q", "--cached", ".")
+        return root
+
+    def test_untracked_files_after_bare_git_init_are_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = run_check(self.bare_init(tmp))
+        self.assertFalse(r["ok"])
+        self.assertIn("tracked by git", self.msgs(r))
+
+    def test_one_untracked_required_file_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp)
+            git(root, "rm", "-q", "--cached", "docs/CONSTRAINTS.md")
+            r = run_check(root)
+        self.assertFalse(r["ok"])
+        self.assertIn("docs/CONSTRAINTS.md", self.msgs(r))
+
+    def test_git_runs_with_c_locale(self):
+        real = subprocess.run
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp)
+            with mock.patch("subprocess.run", side_effect=lambda *a, **k: real(*a, **k)) as m:
+                run_check(root)
+        envs = [c.kwargs.get("env") for c in m.call_args_list if c.args and c.args[0][0] == "git"]
+        self.assertTrue(envs and all(e and e.get("LC_ALL") == "C" for e in envs))
+
     def test_clean_repo(self):
         r = self.check()
         self.assertTrue(r["ok"], r)
@@ -710,7 +739,7 @@ class PlaceholderCoverageTests(unittest.TestCase):
         tracked = git(REPO_ROOT, "ls-files").splitlines()
         stranded = []
         for rel in tracked:
-            if rel in ("setup.sh", "README.md") or not onboard._scanned(rel) or rel in gate.BOOTSTRAP_PATHS:
+            if not onboard._scanned(rel) or rel in gate.BOOTSTRAP_PATHS:
                 continue
             text = onboard._read_regular(REPO_ROOT / rel) or ""
             stranded += ["%s %s" % (rel, m) for m in onboard.PLACEHOLDER_RE.findall(text) if m[2:-2] not in fillable]

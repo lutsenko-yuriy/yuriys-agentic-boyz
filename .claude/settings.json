@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {"type": "command", "command": "\"${CLAUDE_PROJECT_DIR}/scripts/onboard/gate.sh\" SessionStart", "timeout": 5}
+        ]
+      }
+    ],
+    "UserPromptExpansion": [
+      {
+        "hooks": [
+          {"type": "command", "command": "\"${CLAUDE_PROJECT_DIR}/scripts/onboard/gate.sh\" UserPromptExpansion", "timeout": 5}
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {"type": "command", "command": "\"${CLAUDE_PROJECT_DIR}/scripts/onboard/gate.sh\" PreToolUse", "timeout": 5}
+        ]
+      }
+    ]
+  }
+}

@@ -169,8 +169,8 @@ class ConfigAgreementTest(unittest.TestCase):
         manual = set(onboard.KNOWN_PLACEHOLDERS) - set(onboard.PLACEHOLDER_FIELDS) - {"PM_TOOL"}
         present = set()
         for rel in (f for f in out.split("\0") if f and onboard._scanned(f)):
-            if rel in ("README.md", "setup.sh") or rel.startswith("skills/configure/onboard/"):
-                continue  # README is rewritten and setup.sh deleted in the cutover WUs
+            if rel.startswith("skills/configure/onboard/"):
+                continue
             try:
                 found = onboard.PLACEHOLDER_RE.findall((ROOT / rel).read_text(encoding="utf-8"))
             except (UnicodeDecodeError, OSError):
@@ -190,13 +190,13 @@ class ConfigAgreementTest(unittest.TestCase):
 
     def test_none_is_only_allowed_where_no_consumer_pastes_it(self):
         # Every consumer of a none-ok key's placeholder must be a file where `none` reads naturally.
-        harmless = {"docs/experiments/README.md"}
+        harmless = {"docs/experiments/README.md", "README.md"}  # README: placeholders table wording, WU8
         none_ok = set((block("none-ok", SKILL.read_text(encoding="utf-8")) or "").split())
         out = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True, text=True).stdout
         for key in sorted(none_ok):
             name = next(n for n, f in onboard.PLACEHOLDER_FIELDS.items() if f == key)
             token = "{{%s}}" % name
-            users = {f for f in out.split("\0") if f and onboard._scanned(f) and f not in ("README.md", "setup.sh")
+            users = {f for f in out.split("\0") if f and onboard._scanned(f)
                      and (ROOT / f).is_file() and not f.startswith("skills/configure/onboard/")
                      and token in (ROOT / f).read_text(encoding="utf-8")}
             self.assertLessEqual(users, harmless, "%s: %s" % (key, sorted(users - harmless)))
@@ -235,23 +235,37 @@ class StepReferenceTest(unittest.TestCase):
 class NoStrayWriteVerbsTest(unittest.TestCase):
     VERB_RE = re.compile(VERB + r"\s+(?!`)", re.IGNORECASE)
 
+    def offenders(self, name, text, declared):
+        out = []
+        for ln in text.splitlines():
+            if ln.lstrip().startswith(("description:", "<!-- onboard:", "<!-- /onboard:")):
+                continue  # frontmatter and the structured declaration markers
+            scrubbed = re.sub(r"`[^`]*`", "``", ln) if HUMAN_MARK in ln else ln  # human-only commands are not prose
+            if self.VERB_RE.search(scrubbed):
+                out.append("%s: %s" % (name, ln.strip()[:100]))
+            for tok in WRITE_RE.findall(ln):
+                if tok not in declared:
+                    out.append("%s: unlisted target %s" % (name, tok))
+        return out
+
     def test_write_verbs_are_followed_by_a_listed_path(self):
         declared = set(declared_writes(SKILL.read_text(encoding="utf-8")))
         offenders = []
         for p in skill_files():
-            for ln in p.read_text(encoding="utf-8").splitlines():
-                if ln.lstrip().startswith(("description:", "<!-- onboard:", "<!-- /onboard:")):
-                    continue  # frontmatter and the structured declaration markers
-                if self.VERB_RE.search(ln):
-                    offenders.append("%s: %s" % (p.name, ln.strip()[:100]))
-                for tok in WRITE_RE.findall(ln):
-                    if tok not in declared:
-                        offenders.append("%s: unlisted target %s" % (p.name, tok))
+            offenders += self.offenders(p.name, p.read_text(encoding="utf-8"), declared)
         self.assertEqual([], offenders)
+
+    def test_backticked_write_on_an_agent_line_is_flagged(self):
+        for ln in ("Then `Write docs/PRODUCT_SPEC.md` with a summary.", "Then `update README.md` with the name."):
+            self.assertTrue(self.offenders("x", ln, set()), ln)
+
+    def test_backticked_command_on_a_human_line_is_not_flagged(self):
+        ln = "Ask the user to open a separate terminal and paste `git remote remove origin`."
+        self.assertEqual([], self.offenders("x", ln, set()))
 
 
 def make_clone(parent, origin=None, sentinel=False):
-    """A scratch git repo holding this working tree's tracked files (README/setup.sh are out of scope here)."""
+    """A scratch git repo holding this working tree's tracked files (README included)."""
     dest = Path(parent) / "clone"
     dest.mkdir()
     out = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True, text=True, check=True).stdout
@@ -292,7 +306,7 @@ def stranded(root):
     writes = set(declared_writes(SKILL.read_text(encoding="utf-8")))
     left = {}
     for rel in onboard._tracked_files(root):
-        if rel in ("README.md", "setup.sh") or not onboard._scanned(rel) or not (root / rel).is_file():
+        if not onboard._scanned(rel) or not (root / rel).is_file():
             continue
         found = onboard.PLACEHOLDER_RE.findall((root / rel).read_text(encoding="utf-8"))
         if found and rel not in writes:
@@ -308,6 +322,13 @@ class ApplyEndToEndTest(unittest.TestCase):
             write_config(root)
             onboard.apply(root)
             self.assertEqual({}, stranded(root))
+
+    def test_applied_adopter_clone_has_no_readme_placeholders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_clone(tmp)
+            write_config(root)
+            onboard.apply(root)
+            self.assertNotIn("README.md", onboard.check(root)["placeholders"])
 
     def test_an_empty_value_would_strand_onboarding(self):
         # Why the skill demands `none`: this placeholder lives in a file the gate will not let the agent edit.
@@ -366,8 +387,10 @@ class TemplateFlowTest(unittest.TestCase):
     def test_human_only_commands_run_in_a_separate_terminal_not_via_bang(self):
         text = text_of(skill_files())
         human = human_commands(text)
-        self.assertEqual(2, len(human))
+        self.assertEqual(4, len(human))
         self.assertTrue(any("&& git remote set-url origin" in c for c in human))
+        self.assertTrue(any(c.endswith("&& git remote remove origin") for c in human))
+        self.assertTrue(any("&& git add <the files it listed>" in c for c in human))
         self.assertTrue(any(c.endswith("onboard.py mark --force") for c in human))
         for c in human:
             # A new terminal opens in ~: the line must cd to the repo root and use the interpreter probe found.

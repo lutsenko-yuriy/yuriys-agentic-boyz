@@ -246,9 +246,12 @@ class FileSelectionTests(unittest.TestCase):
     def test_untracked_files_untouched(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_repo(tmp, {"skill_router.toml": toml_text(name="N")})
-            (root / "u.md").write_text(ph("PROJECT_NAME"))
+            (root / "u.md").write_text("plain\n")
             self.assertEqual(run_apply(root, "--root", str(root))[0], 0)
-            self.assertEqual((root / "u.md").read_text(), ph("PROJECT_NAME"))
+            self.assertEqual((root / "u.md").read_text(), "plain\n")
+            (root / "v.md").write_text(ph("PROJECT_NAME"))  # untracked with a placeholder: refused, never filled
+            self.assertNotEqual(run_apply(root, "--root", str(root))[0], 0)
+            self.assertEqual((root / "v.md").read_text(), ph("PROJECT_NAME"))
 
     def test_skipped_paths_untouched_but_knowledge_templates_scanned(self):
         t = ph("PROJECT_NAME")
@@ -307,6 +310,44 @@ class FileSelectionTests(unittest.TestCase):
             self.assertEqual((root / "a.md").read_bytes(), b"a\r\nN\r\n")
             self.assertEqual(stat.S_IMODE((root / "run.sh").stat().st_mode), 0o755)
             self.assertEqual(stat.S_IMODE((root / "a.md").stat().st_mode), 0o444)
+
+    def test_nothing_tracked_refuses_and_keeps_sentinel(self):
+        t = ph("PROJECT_NAME")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": toml_text(name="N"), "a.md": t, ".yab-template": "repo=other/x\n"})
+            subprocess.run(["git", "-C", str(root), "rm", "-r", "-q", "--cached", "."], check=True)
+            before = snapshot(root)
+            code, _, err = run_apply(root, "--root", str(root))
+            self.assertNotEqual(code, 0)
+            self.assertIn("tracked by git", err)
+            self.assertEqual(before, snapshot(root))
+
+    def test_retrofit_with_only_named_files_added_cannot_be_marked(self):
+        # Existing repo (one commit), YAB files copied in; only the 4 named files are `git add`-ed.
+        t = ph("PROJECT_NAME")
+        named = ["skill_router.toml", "docs/TECH_STACK.md", "docs/CODE_STYLE.md", "docs/CONSTRAINTS.md"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"main.py": "x\n"})
+            subprocess.run(["git", "-C", str(root), "rm", "-r", "-q", "--cached", "."], check=True)
+            (root / "skill_router.toml").write_text(toml_text(name="N"))
+            subprocess.run(["git", "-C", str(root), "add", "main.py"] + named, check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", "retrofit"], check=True)
+            (root / "AGENTS.md").write_text(t)  # untracked, holds a placeholder
+            before = snapshot(root)
+            code, _, err = run_apply(root, "--root", str(root))
+            self.assertNotEqual(code, 0)
+            self.assertIn("AGENTS.md", err)
+            self.assertEqual(before, snapshot(root))
+            res = onboard.check(root)
+            self.assertFalse(res["ok"])
+            self.assertIn("AGENTS.md", " ".join(res["errors"]))
+            self.assertNotEqual(0, onboard.mark(root, False))
+
+    def test_ignored_untracked_placeholder_files_are_not_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {".gitignore": "scratch.md\n"})
+            (root / "scratch.md").write_text(ph("PROJECT_NAME"))
+            self.assertNotIn("scratch.md", " ".join(onboard.check(root)["errors"]))
 
     def test_unchanged_files_are_not_rewritten(self):
         with tempfile.TemporaryDirectory() as tmp:

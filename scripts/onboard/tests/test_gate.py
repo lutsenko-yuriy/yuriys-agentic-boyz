@@ -295,6 +295,22 @@ class RootResolution(Base):
         nested = make_repo(self.root, "sub")
         self.assertEqual(decision(run(pre(nested, "Write", {"file_path": "AGENTS.md"}))), "deny")
 
+    def test_no_git_repo_denies_with_git_init_hint(self):
+        plain = Path(self.tmp) / "plain"
+        plain.mkdir()
+        self.project_dir(plain)
+        with mock.patch("os.getcwd", return_value=str(plain)):
+            code, out, _ = run(pre(plain, "Read", {"file_path": "x"}))
+        self.assertEqual("deny", decision((code, out, "")))
+        reason = json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("not a git repository", reason)
+        self.assertIn("git init", reason)
+        self.assertIn("separate terminal", reason)
+        self.assertIn("git init && git add -A && git commit", reason)
+        # SessionStart and UserPromptExpansion still fail open
+        with mock.patch("os.getcwd", return_value=str(plain)):
+            self.assertEqual((0, "", ""), run({"hook_event_name": "SessionStart", "cwd": str(plain)}))
+
     def test_fallbacks_when_project_dir_unset_or_invalid(self):
         self.project_dir(None)
         self.assertEqual(decision(run(pre(self.root, "Agent", {}))), "deny")  # payload cwd

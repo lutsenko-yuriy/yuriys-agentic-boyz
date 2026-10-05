@@ -150,8 +150,11 @@ def probe(run_tools: bool = True) -> Dict[str, Any]:
 
 
 def _git(root: Path, *args: str, allow_fail: bool = False, timeout: float = 10) -> str:
+    # LC_ALL=C: callers match git's messages (e.g. "not a git repository"), which Homebrew git localises.
+    env = dict(os.environ, LC_ALL="C")
     res = subprocess.run(
-        ["git", "-C", str(root), *args], capture_output=True, encoding="utf-8", errors="replace", timeout=timeout
+        ["git", "-C", str(root), *args], capture_output=True, encoding="utf-8", errors="replace", timeout=timeout,
+        env=env,
     )
     if res.returncode != 0:
         if allow_fail:
@@ -163,6 +166,33 @@ def _git(root: Path, *args: str, allow_fail: bool = False, timeout: float = 10) 
 def _tracked_files(root: Path) -> List[str]:
     out = _git(root, "-c", "core.quotePath=false", "ls-files", "-z")
     return [f for f in out.split("\0") if f]
+
+
+def _untracked_problem(root: Path, scan_content: bool = True) -> Optional[str]:
+    """check and apply only see tracked files, so untracked ones must not let a project pass vacuously.
+
+    Three cases: nothing tracked (bare `git init`); a required file untracked; any other untracked, non-ignored
+    scanned file that still holds a placeholder (a retrofit where only some files were `git add`-ed).
+    """
+    tracked = set(_tracked_files(root))
+    if not tracked:
+        return "no files are tracked by git: run `git add -A && git commit -m 'Initial import'` first"
+    loose = [rel for rel in ARTIFACTS + ["skill_router.toml"] if (root / rel).exists() and rel not in tracked]
+    if loose:
+        return "not tracked by git (git add them): %s" % ", ".join(loose)
+    if scan_content:
+        out = _git(root, "-c", "core.quotePath=false", "ls-files", "-z", "--others", "--exclude-standard")
+        dirty = []
+        for rel in sorted(f for f in out.split("\0") if f and _scanned(f)):
+            try:
+                text = _read_regular(root / rel)
+            except (UnicodeDecodeError, OSError):
+                continue
+            if PLACEHOLDER_RE.search(text or ""):
+                dirty.append(rel)
+        if dirty:
+            return "untracked files with {{...}} placeholders (git add and commit them): %s" % ", ".join(dirty)
+    return None
 
 
 def _read_regular(path: Path) -> Optional[str]:
@@ -305,6 +335,9 @@ def check(root: Path) -> Dict[str, Any]:
     """In template mode (YAB itself) unfilled placeholders, template artifacts and empty config are expected."""
     errors: List[str] = []
     template_mode = _template_mode(root, errors)
+    untracked = _untracked_problem(root, scan_content=not template_mode)
+    if untracked:
+        errors.append(untracked)
     warnings: List[str] = []
     placeholders: Dict[str, List[str]] = {}
     for rel in _tracked_files(root):
@@ -438,6 +471,9 @@ def apply(root: Path) -> Dict[str, Any]:
     """
     if _template_mode(root, []):
         raise Refused("this is the YAB template itself (.yab-template, origin is YAB): apply would fill it in; refusing")
+    untracked = _untracked_problem(root)
+    if untracked:
+        raise Refused(untracked)
     project, providers = _read_config(root)
     pm, pm_error = _pm(providers)
     if pm_error:
