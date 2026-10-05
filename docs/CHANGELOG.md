@@ -15,6 +15,7 @@ A record of all versioned releases. For planned work and known issues, see @docs
 - HAB-278 WU6: /onboard skill (inline; probe→config→apply→artifacts→model tiers→check/mark; human-only steps for template/fork) + skill/gate agreement tests; check rejects project_id 'none' for linear (PR #20) [wip]
 - HAB-278 WU7: cutover — gate hooks wired in committed .claude/settings.json, .yab-template sentinel, setup.sh removed, CI test job; check/apply refuse untracked or uncommitted template files; no-.git deny hint (PR #21) [wip]
 - HAB-278 WU8: README rewritten for /onboard (launch from repo root, gate, produced files, human steps, onboarded marker); README exemption removed from skill tests (PR #22) [wip]
+- HAB-278 WU9a: template-state tests (shipped templates, placeholder coverage, sentinel, template toml shape) are skipped via shared `template_only` helper once `.yab-template` is gone, so an onboarded project's inherited CI (tests.yml) stays green [wip]
 
 ---
 

@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.onboard import onboard
+from scripts.onboard.tests import template_only
 
 try:
     import tomllib  # noqa: F401
@@ -650,6 +651,7 @@ def done(text):
     return re.sub(r"<[a-z][^<>\n]*>", "x", text)
 
 
+@template_only
 @needs_toml
 class ShippedTemplateTests(unittest.TestCase):
     def check(self, files):
@@ -731,6 +733,7 @@ class ShippedTemplateTests(unittest.TestCase):
         self.assertIn("language Python", " | ".join(r["errors"]))
 
 
+@template_only
 class PlaceholderCoverageTests(unittest.TestCase):
     def test_every_placeholder_is_fillable_or_in_a_bootstrap_file(self):
         from scripts.onboard import gate

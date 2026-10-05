@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.onboard import onboard
+from scripts.onboard.tests import template_only
 from scripts.onboard.tests.test_onboard import YAB_ORIGIN, YAB_SENTINEL, git, make_repo, needs_toml
 
 REPO = Path(__file__).resolve().parents[3]
@@ -83,6 +84,7 @@ def snapshot(root):
 
 @needs_toml
 class SchemaTests(unittest.TestCase):
+    @template_only
     def test_template_toml_has_every_mapped_field_empty_and_pm_present_but_empty(self):
         import tomllib
 

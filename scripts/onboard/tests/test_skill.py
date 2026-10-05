@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from scripts.onboard import bash_policy, gate, onboard
+from scripts.onboard.tests import template_only
 
 ROOT = Path(__file__).resolve().parents[3]
 SKILL_DIR = ROOT / "skills" / "configure" / "onboard"
@@ -188,6 +189,7 @@ class ConfigAgreementTest(unittest.TestCase):
         self.assertEqual(set(), none_ok & real)
         self.assertEqual(onboard.PROJECT_KEYS - {"keep_licence"}, none_ok | real)
 
+    @template_only
     def test_none_is_only_allowed_where_no_consumer_pastes_it(self):
         # Every consumer of a none-ok key's placeholder must be a file where `none` reads naturally.
         harmless = {"docs/experiments/README.md"}
@@ -316,6 +318,7 @@ def stranded(root):
 
 @unittest.skipUnless(has_tomllib(), "needs Python 3.11+")
 class ApplyEndToEndTest(unittest.TestCase):
+    @template_only
     def test_concrete_values_leave_no_placeholder_outside_the_writes_list(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_clone(tmp)
@@ -330,6 +333,7 @@ class ApplyEndToEndTest(unittest.TestCase):
             onboard.apply(root)
             self.assertNotIn("README.md", onboard.check(root)["placeholders"])
 
+    @template_only
     def test_an_empty_value_would_strand_onboarding(self):
         # Why the skill demands `none`: this placeholder lives in a file the gate will not let the agent edit.
         with tempfile.TemporaryDirectory() as tmp:
@@ -352,6 +356,7 @@ class TemplateFlowTest(unittest.TestCase):
 
     YAB_URL = "https://github.com/%s.git" % onboard.YAB_REPO
 
+    @template_only
     def test_yab_origin_is_template_mode_and_plain_mark_works(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_clone(tmp, self.YAB_URL, sentinel=True)

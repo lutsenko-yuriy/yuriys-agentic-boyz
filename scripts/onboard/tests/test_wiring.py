@@ -18,6 +18,7 @@ import unittest
 from pathlib import Path
 
 from scripts.onboard import onboard
+from scripts.onboard.tests import template_only
 
 ROOT = Path(__file__).resolve().parents[3]
 SETTINGS = ROOT / ".claude" / "settings.json"
@@ -72,6 +73,7 @@ class SettingsWiringTests(unittest.TestCase):
         self.assertTrue(ignored(".claude/settings.local.json"))
 
 
+@template_only
 class SentinelTests(unittest.TestCase):
     def test_committed_sentinel_names_yab(self):
         text = (ROOT / ".yab-template").read_text(encoding="utf-8")
