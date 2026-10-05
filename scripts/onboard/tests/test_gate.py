@@ -306,6 +306,7 @@ class RootResolution(Base):
         self.assertIn("not a git repository", reason)
         self.assertIn("git init", reason)
         self.assertIn("separate terminal", reason)
+        self.assertIn("git init && git add -A && git commit", reason)
         # SessionStart and UserPromptExpansion still fail open
         with mock.patch("os.getcwd", return_value=str(plain)):
             self.assertEqual((0, "", ""), run({"hook_event_name": "SessionStart", "cwd": str(plain)}))

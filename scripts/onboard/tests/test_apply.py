@@ -308,6 +308,17 @@ class FileSelectionTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE((root / "run.sh").stat().st_mode), 0o755)
             self.assertEqual(stat.S_IMODE((root / "a.md").stat().st_mode), 0o444)
 
+    def test_nothing_tracked_refuses_and_keeps_sentinel(self):
+        t = ph("PROJECT_NAME")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": toml_text(name="N"), "a.md": t, ".yab-template": "repo=other/x\n"})
+            subprocess.run(["git", "-C", str(root), "rm", "-r", "-q", "--cached", "."], check=True)
+            before = snapshot(root)
+            code, _, err = run_apply(root, "--root", str(root))
+            self.assertNotEqual(code, 0)
+            self.assertIn("tracked by git", err)
+            self.assertEqual(before, snapshot(root))
+
     def test_unchanged_files_are_not_rewritten(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_repo(tmp, {"skill_router.toml": toml_text("", name="N"), "a.md": "plain\n"})

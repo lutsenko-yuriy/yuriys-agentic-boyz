@@ -74,7 +74,7 @@ GIT_TIMEOUT = 2
 OK = (0, "", "")
 
 NOT_A_REPO = "not a git repository"
-NO_REPO_HINT = "not a git repository - run `git init` in a separate terminal in the project root, then /onboard"
+NO_REPO_HINT = "not a git repository - run `git init && git add -A && git commit -m 'Initial import'` in a separate terminal in the project root, then /onboard"
 
 
 def _deny(reason: str) -> Result:

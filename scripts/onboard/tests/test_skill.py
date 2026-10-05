@@ -235,19 +235,33 @@ class StepReferenceTest(unittest.TestCase):
 class NoStrayWriteVerbsTest(unittest.TestCase):
     VERB_RE = re.compile(VERB + r"\s+(?!`)", re.IGNORECASE)
 
+    def offenders(self, name, text, declared):
+        out = []
+        for ln in text.splitlines():
+            if ln.lstrip().startswith(("description:", "<!-- onboard:", "<!-- /onboard:")):
+                continue  # frontmatter and the structured declaration markers
+            scrubbed = re.sub(r"`[^`]*`", "``", ln) if HUMAN_MARK in ln else ln  # human-only commands are not prose
+            if self.VERB_RE.search(scrubbed):
+                out.append("%s: %s" % (name, ln.strip()[:100]))
+            for tok in WRITE_RE.findall(ln):
+                if tok not in declared:
+                    out.append("%s: unlisted target %s" % (name, tok))
+        return out
+
     def test_write_verbs_are_followed_by_a_listed_path(self):
         declared = set(declared_writes(SKILL.read_text(encoding="utf-8")))
         offenders = []
         for p in skill_files():
-            for ln in p.read_text(encoding="utf-8").splitlines():
-                if ln.lstrip().startswith(("description:", "<!-- onboard:", "<!-- /onboard:")):
-                    continue  # frontmatter and the structured declaration markers
-                if self.VERB_RE.search(re.sub(r"`[^`]*`", "``", ln)):  # quoted commands are not prose verbs
-                    offenders.append("%s: %s" % (p.name, ln.strip()[:100]))
-                for tok in WRITE_RE.findall(ln):
-                    if tok not in declared:
-                        offenders.append("%s: unlisted target %s" % (p.name, tok))
+            offenders += self.offenders(p.name, p.read_text(encoding="utf-8"), declared)
         self.assertEqual([], offenders)
+
+    def test_backticked_write_on_an_agent_line_is_flagged(self):
+        for ln in ("Then `Write docs/PRODUCT_SPEC.md` with a summary.", "Then `update README.md` with the name."):
+            self.assertTrue(self.offenders("x", ln, set()), ln)
+
+    def test_backticked_command_on_a_human_line_is_not_flagged(self):
+        ln = "Ask the user to open a separate terminal and paste `git remote remove origin`."
+        self.assertEqual([], self.offenders("x", ln, set()))
 
 
 def make_clone(parent, origin=None, sentinel=False):
