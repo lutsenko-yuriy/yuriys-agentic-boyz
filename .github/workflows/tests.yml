@@ -1,0 +1,26 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  onboard:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Git identity for tests that commit
+        run: |
+          git config --global user.name "ci"
+          git config --global user.email "ci@example.invalid"
+          git config --global init.defaultBranch main
+      - name: Run onboard tests
+        run: python -W error -m unittest discover -s scripts/onboard/tests -t .

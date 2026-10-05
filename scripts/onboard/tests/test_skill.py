@@ -169,8 +169,8 @@ class ConfigAgreementTest(unittest.TestCase):
         manual = set(onboard.KNOWN_PLACEHOLDERS) - set(onboard.PLACEHOLDER_FIELDS) - {"PM_TOOL"}
         present = set()
         for rel in (f for f in out.split("\0") if f and onboard._scanned(f)):
-            if rel in ("README.md", "setup.sh") or rel.startswith("skills/configure/onboard/"):
-                continue  # README is rewritten and setup.sh deleted in the cutover WUs
+            if rel == "README.md" or rel.startswith("skills/configure/onboard/"):
+                continue  # README is rewritten in WU8
             try:
                 found = onboard.PLACEHOLDER_RE.findall((ROOT / rel).read_text(encoding="utf-8"))
             except (UnicodeDecodeError, OSError):
@@ -196,7 +196,7 @@ class ConfigAgreementTest(unittest.TestCase):
         for key in sorted(none_ok):
             name = next(n for n, f in onboard.PLACEHOLDER_FIELDS.items() if f == key)
             token = "{{%s}}" % name
-            users = {f for f in out.split("\0") if f and onboard._scanned(f) and f not in ("README.md", "setup.sh")
+            users = {f for f in out.split("\0") if f and onboard._scanned(f) and f != "README.md"
                      and (ROOT / f).is_file() and not f.startswith("skills/configure/onboard/")
                      and token in (ROOT / f).read_text(encoding="utf-8")}
             self.assertLessEqual(users, harmless, "%s: %s" % (key, sorted(users - harmless)))
@@ -251,7 +251,7 @@ class NoStrayWriteVerbsTest(unittest.TestCase):
 
 
 def make_clone(parent, origin=None, sentinel=False):
-    """A scratch git repo holding this working tree's tracked files (README/setup.sh are out of scope here)."""
+    """A scratch git repo holding this working tree's tracked files (README is out of scope here)."""
     dest = Path(parent) / "clone"
     dest.mkdir()
     out = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True, text=True, check=True).stdout
@@ -292,7 +292,7 @@ def stranded(root):
     writes = set(declared_writes(SKILL.read_text(encoding="utf-8")))
     left = {}
     for rel in onboard._tracked_files(root):
-        if rel in ("README.md", "setup.sh") or not onboard._scanned(rel) or not (root / rel).is_file():
+        if rel == "README.md" or not onboard._scanned(rel) or not (root / rel).is_file():
             continue
         found = onboard.PLACEHOLDER_RE.findall((root / rel).read_text(encoding="utf-8"))
         if found and rel not in writes:

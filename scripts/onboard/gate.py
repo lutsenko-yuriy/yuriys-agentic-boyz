@@ -24,10 +24,11 @@ backstop and must stay above 3.
 Known residual: the MCP rule trusts tool *names* (a `get_or_create_*` tool would pass; the payload carries no
 readOnlyHint). Mitigated because the agent cannot add MCP servers while gated.
 
-Intended wiring (WU7, not wired yet; each row `"timeout": 5`):
-    SessionStart (matcher startup)  scripts/onboard/gate.sh SessionStart
-    UserPromptExpansion             scripts/onboard/gate.sh UserPromptExpansion
-    PreToolUse (no matcher)         scripts/onboard/gate.sh PreToolUse
+Wired in the committed .claude/settings.json (each row `"timeout": 5`; command is gate.sh with the event as argv[1]):
+    SessionStart (matcher startup), UserPromptExpansion, PreToolUse (no matcher)
+
+Known residual: whether PreToolUse fires for user `!` shell commands is not relied on; the human-only steps in
+/onboard use a separate terminal.
 """
 
 import json
