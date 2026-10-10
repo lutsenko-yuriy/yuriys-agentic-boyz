@@ -23,7 +23,16 @@ _RESERVED_TOML_SECTIONS = {"providers", "llm", "core", "project"}
 
 
 def _load_toml(path: Path) -> dict:
-    if tomllib is None or not path.exists():
+    if not path.exists():
+        return {}
+    if tomllib is None:
+        # Without this the [providers] roles vanish and errors blame the role name instead.
+        version = ".".join(map(str, sys.version_info[:3]))
+        print(
+            f"[skill_router] Warning: cannot read {path} on Python {version}; "
+            "tomllib needs Python 3.11+, so config is ignored",
+            file=sys.stderr,
+        )
         return {}
     try:
         with open(path, "rb") as f:
