@@ -383,9 +383,10 @@ class GitTimeout(Base):
 class WrapperTests(Base):
     """gate.sh must turn any gate.py failure into the per-event rule (Claude Code fails open except on exit 2)."""
 
-    def sh(self, event, payload, python=None, gate_py=None, deadline=None):
+    def sh(self, event, payload, python=None, gate_py=None, deadline=None, project_dir=None, env_extra=None):
         env = dict(os.environ)
-        env["CLAUDE_PROJECT_DIR"] = str(self.root)
+        env["CLAUDE_PROJECT_DIR"] = str(project_dir or self.root)
+        env.update(env_extra or {})
         env["YAB_GATE_PYTHON"] = python or sys.executable
         if deadline:
             env["YAB_GATE_DEADLINE"] = deadline
@@ -470,6 +471,31 @@ class WrapperTests(Base):
         self.assertEqual(self.sh("PreToolUse", pre(self.root, "Read", {}), python=missing)[0], 2)
         self.assertEqual(self.sh("SessionStart", {}, python=missing), (0, "", ""))
         self.assertEqual(self.sh("UserPromptExpansion", {}, python=missing), (0, "", ""))
+
+    def test_fast_path_skips_python_when_marker_present(self):
+        mark(self.root)
+        missing = "/nonexistent/python-xyz"  # a started interpreter would fail closed (exit 2)
+        self.assertEqual(self.sh("PreToolUse", pre(self.root, "Agent", {}), python=missing), (0, "", ""))
+        self.assertEqual(self.sh("PreToolUse", "x" * 200000, python=missing), (0, "", ""))
+
+    def test_fast_path_falls_back_to_gate_py(self):
+        missing = "/nonexistent/python-xyz"
+        payload = pre(self.root, "Agent", {})
+        self.assertEqual(self.sh("PreToolUse", payload, python=missing)[0], 2)  # no marker
+        mark(self.root)
+        for var in ("GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE"):  # git would not use <project>/.git
+            self.assertEqual(self.sh("PreToolUse", payload, python=missing, env_extra={var: self.tmp})[0], 2, var)
+        fake = self.root / "docs" / "nested"  # a .git dir git ignores (no HEAD): gate.py resolves the outer repo
+        (fake / ".git" / "yab").mkdir(parents=True)
+        (fake / ".git" / "yab" / "onboarded").write_text("x")
+        self.assertEqual(self.sh("PreToolUse", payload, python=missing, project_dir=fake)[0], 2)
+        sub = self.root / "docs"  # launched from a subdirectory: no .git there
+        self.assertEqual(self.sh("PreToolUse", payload, python=missing, project_dir=sub)[0], 2)
+        git(self.root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x")
+        wt = Path(self.tmp) / "wt"
+        git(self.root, "worktree", "add", "-q", str(wt))  # .git is a file in a linked worktree
+        self.assertEqual(self.sh("PreToolUse", payload, python=missing, project_dir=wt)[0], 2)
+        self.assertEqual(self.sh("PreToolUse", payload, project_dir=wt), (0, "", ""))  # gate.py: shared marker
 
     def test_malformed_stdin_through_wrapper(self):
         self.project_dir(self.root)

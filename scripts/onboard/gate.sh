@@ -12,6 +12,14 @@ dir="$(cd "$(dirname "$0")" && pwd)"
 py="${YAB_GATE_PYTHON:-python3}"
 deadline="${YAB_GATE_DEADLINE:-3}"
 
+# Fast path: an onboarded plain checkout skips Python. Worktrees, subdirectories, GIT_* overrides and a .git with no
+# HEAD (git would skip it for an enclosing repo) go through gate.py.
+if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -z "${GIT_DIR:-}${GIT_COMMON_DIR:-}${GIT_WORK_TREE:-}" ] \
+  && [ -f "$CLAUDE_PROJECT_DIR/.git/HEAD" ] && [ -f "$CLAUDE_PROJECT_DIR/.git/yab/onboarded" ]; then
+  cat >/dev/null  # drain the payload so the writer never sees a closed pipe
+  exit 0
+fi
+
 fail() {
   case "$event" in
     SessionStart|UserPromptExpansion) exit 0 ;;

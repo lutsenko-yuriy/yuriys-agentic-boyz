@@ -30,6 +30,8 @@ ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 PYTHON_RE = re.compile(r"^python3(\.\d+)?$")
 ONBOARD_SCRIPTS = ("scripts/onboard/onboard.py", "./scripts/onboard/onboard.py")
 ONBOARD_SUBCOMMANDS = frozenset({"probe", "check", "apply", "mark"})
+# `remote` arguments as (flag, takes a value, may end with --public); onboard.py validates the value itself.
+ONBOARD_REMOTE_FORMS = {"--new": (True, True), "--url": (True, False), "--none": (False, False)}
 
 INSPECTION_COMMANDS = (
     "ls pwd cat head tail wc file stat tree du diff cmp grep egrep rg cut tr jq basename dirname realpath which "
@@ -219,6 +221,25 @@ def _check_gh(args: List[str]) -> Result:
 
 
 def _check_onboard(args: List[str]) -> Result:
+    if len(args) >= 3 and args[0] in ONBOARD_SCRIPTS and args[1] == "remote" and _remote_form_ok(args[2:]):
+        return OK
     if len(args) != 2 or args[0] not in ONBOARD_SCRIPTS or args[1] not in ONBOARD_SUBCOMMANDS:
-        return False, "python: only `scripts/onboard/onboard.py <probe|check|apply|mark>` with no other arguments"
+        return False, (
+            "python: only `scripts/onboard/onboard.py <probe|check|apply|mark>` with no other arguments, or "
+            "`remote --new NAME [--public] | --url URL | --none`"
+        )
     return OK
+
+
+def _remote_form_ok(tail: List[str]) -> bool:
+    flag, rest = tail[0], tail[1:]
+    if flag not in ONBOARD_REMOTE_FORMS:
+        return False
+    takes_value, may_be_public = ONBOARD_REMOTE_FORMS[flag]
+    if takes_value:
+        if not rest or rest[0].startswith("-"):
+            return False
+        rest = rest[1:]
+    if may_be_public and rest == ["--public"]:
+        rest = []
+    return not rest

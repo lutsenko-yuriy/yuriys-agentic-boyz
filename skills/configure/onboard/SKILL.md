@@ -29,16 +29,22 @@ Only these files. Everything else is filled by `onboard.py apply`.
 
 ## Commands
 
-Only these commands are allowed while gated. Use exactly this form, with no flags. The human-only commands are in step 2.
+Only these commands are allowed while gated. Use exactly these forms, with no other flags. The human-only commands are in step 2.
 
-`probe` works on any Python 3. `check`, `apply` and `mark` need Python 3.11+: use an interpreter named in the probe's `pythons_with_tomllib` (a versioned name such as `python3.12`, or plain `python3`), or the absolute path `CLAUDE.local.md` gives. Below, `python3.12` stands for that interpreter.
+`probe` and `remote` work on any Python 3. `check`, `apply` and `mark` need Python 3.11+: use an interpreter named in the probe's `pythons_with_tomllib` (a versioned name such as `python3.12`, or plain `python3`), or the absolute path `CLAUDE.local.md` gives. Below, `python3.12` stands for that interpreter.
 
 ```bash
 python3 scripts/onboard/onboard.py probe
 python3.12 scripts/onboard/onboard.py check
 python3.12 scripts/onboard/onboard.py apply
 python3.12 scripts/onboard/onboard.py mark
+python3 scripts/onboard/onboard.py remote --new NAME
+python3 scripts/onboard/onboard.py remote --new NAME --public
+python3 scripts/onboard/onboard.py remote --url URL
+python3 scripts/onboard/onboard.py remote --none
 ```
+
+`remote` is for step A only and works only while origin is YAB or missing; NAME is `repo` or `owner/repo`.
 
 Read-only inspection (`ls`, `cat`, `git log`, `git ls-files`, `grep`) is fine. `flutter --version`, builds and installs are not: infer the stack from manifests instead.
 
@@ -58,20 +64,21 @@ Run `check` (exit 1 is normal here; read its JSON). State table:
 |---|---|---|---|---|
 | absent | any | | no sentinel error | Configured (no errors, no placeholders): orientation (step 9), `mark`, stop. Otherwise step 3. |
 | present | YAB | maintaining YAB | `template_mode` true, `ok` true | Orientation (step 9), then `mark` (it works in template mode); stop. |
-| present | YAB | new project from the template | `template_mode` true | Human step A below. Re-run `check`: `template_mode` is now false with the sentinel error below. Continue at step 3; `apply` clears the sentinel. |
+| present | YAB | new project from the template | `template_mode` true | Step A below. Re-run `check`: `template_mode` is now false with the sentinel error below. Continue at step 3; `apply` clears the sentinel. |
 | present | not YAB, or none | | `template_mode` false, error ".yab-template present but origin is not ..." | Treat as an adopter: continue at step 3; `apply` clears the sentinel. If the user says this is a YAB fork for maintenance, Human step B, then stop. |
 
 When `template_mode` is true, ask: "(a) maintaining YAB itself, or (b) a fresh project created from the template?"
 
 For each human step, first get the absolute repo root with `git rev-parse --show-toplevel` and the interpreter from probe's `pythons_with_tomllib`, and print the command as one ready-to-paste line with both filled in (a new terminal window opens in the home directory, not the repo).
 
-Human step A (new project): ask the user to open a separate terminal window and paste `cd <absolute repo root> && git remote set-url origin <their repo URL>` (or, if they have no remote repository yet, `cd <absolute repo root> && git remote remove origin`; origin then counts as none, the adopter row below), then say "done"; re-run check afterwards. The gate blocks it for you. With no origin, GitHub Issues as the PM tool cannot work until the user connects an origin later (a remote named origin pointing at their repository).
+Step A (new project): ask one question: "Where should this project's repository live?" with these options: "New private GitHub repo `<repo directory name>`" (first, marked recommended; offer it and the public variant only when probe's `gh_authenticated` is true), "New public GitHub repo", "An existing repository URL" (then ask for the URL), "No remote for now". Run the matching `remote` command yourself (`--new <name>` (plus `--public`), `--url <url>` or `--none`); picking an option is the user's consent. If `remote` fails, show its message and ask the question again; pass `--url` only a URL the user typed. Then re-run check. With no origin, GitHub Issues as the PM tool cannot work until the user connects an origin later. If the user wants a new repo but `gh_authenticated` is not true, use Human step A, then re-run probe and offer the question again.
+Human step A (gh not logged in): ask the user to open a separate terminal window and paste `cd <absolute repo root> && gh auth login`, then say "done"; re-run check afterwards. The gate blocks it for you.
 Human step C (untracked files with placeholders): when check or apply reports untracked files with placeholders, ask the user to open a separate terminal window and paste `cd <absolute repo root> && git add <the files it listed>`, then say "done"; staging is enough, no commit is needed. Re-run check (and apply) afterwards. The gate blocks it for you.
 Human step B (YAB fork for maintenance): ask the user to open a separate terminal window and paste `cd <absolute repo root> && <interpreter> scripts/onboard/onboard.py mark --force` (it needs an interactive terminal), then say "done". Then verify the marker (below) and stop: do not run check or apply again, and do not go on to later steps.
 
 To verify the marker after step B, run `git rev-parse --git-common-dir`, then `ls <git-common-dir>/yab/onboarded` with that output in place of the placeholder. If it is missing, ask the user to repeat step B.
 
-Never run `git remote` yourself, touch the template sentinel yourself, or force the marker; do not use a `!` prefix for these (it may not be a terminal and may still pass through the gate).
+Never run `git remote` yourself (use `remote`), touch the template sentinel yourself, or force the marker; do not use a `!` prefix for these (it may not be a terminal and may still pass through the gate).
 
 ### 3. Collect project config
 

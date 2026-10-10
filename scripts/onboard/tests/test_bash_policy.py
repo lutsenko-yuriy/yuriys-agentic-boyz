@@ -315,6 +315,18 @@ class OnboardTests(PolicyCase):
         self.deny("python3 %s bogus" % ONBOARD)
         self.deny("python3 %s" % ONBOARD)
 
+    def test_allow_onboard_remote_forms(self):
+        self.allow("python3 %s remote --new proj" % ONBOARD)
+        self.allow("python3 %s remote --new me/proj --public" % ONBOARD)
+        self.allow("python3 %s remote --url git@github.com:me/proj.git" % ONBOARD)
+        self.allow("python3 %s remote --none" % ONBOARD)
+
+    def test_deny_onboard_remote_other_shapes(self):
+        for tail in ["", "--none x", "--new", "--new a b", "--new a --private", "--public --new a",
+                     "--url", "--url a --public", "--new --none", "--new -x", "--url --none", "--ne a"]:
+            self.deny(("python3 %s remote " % ONBOARD) + tail)
+        self.deny("python3 %s --root /x remote --none" % ONBOARD)
+
     def test_deny_python_dash_c(self):
         self.deny("python3 -c 'print(1)'")
 
