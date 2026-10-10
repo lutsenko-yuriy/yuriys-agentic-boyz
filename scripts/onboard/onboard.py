@@ -10,7 +10,7 @@ Usage:
                                                          # repoint a template clone's origin (only from YAB or none)
 
 `remote` runs on any Python 3. `check`, `apply` and `mark` read skill_router.toml and need Python 3.11+ (tomllib); they fail loudly (exit 2) otherwise.
-Exit codes: 0 ok, 1 check not clean / mark or apply refused, 2 no tomllib, 3 could not run (not a git repo, bad TOML, ...).
+Exit codes: 0 ok, 1 check not clean / mark, apply or remote refused, 2 no tomllib, 3 could not run (not a git repo, bad TOML, ...).
 """
 
 import argparse
@@ -570,7 +570,7 @@ def _gh(*args: str) -> str:
     return res.stdout.strip()
 
 
-def remote(root: Path, create: Optional[str] = None, url: Optional[str] = None, none: bool = False,
+def remote(root: Path, new: Optional[str] = None, url: Optional[str] = None, none: bool = False,
            public: bool = False) -> Dict[str, Any]:
     """Repoint origin away from YAB: create a GitHub repo (via gh), use a given URL, or drop origin.
 
@@ -579,24 +579,33 @@ def remote(root: Path, create: Optional[str] = None, url: Optional[str] = None, 
     current = _git(root, "remote", "get-url", "origin", allow_fail=True)
     if current and _remote_id(current) != (YAB_HOST, YAB_REPO):
         raise Refused("origin already points at %s; change it yourself if needed" % current)
-    if create is not None:
-        if not REPO_NAME_RE.match(create) or ".." in create:
-            raise Refused("invalid repository name %r (use NAME or OWNER/NAME)" % create)
-        _gh("repo", "create", create, "--public" if public else "--private")
+    if new is not None:
+        if not REPO_NAME_RE.match(new) or ".." in new:
+            raise Refused("invalid repository name %r (use NAME or OWNER/NAME)" % new)
         try:
-            url = _gh("repo", "view", create, "--json", "url", "--jq", ".url") + ".git"
-        except OnboardError as e:
-            raise OnboardError("created %s but could not read its URL (%s); re-run with --url" % (create, e))
-    elif url is not None:
+            _gh("repo", "create", new, "--public" if public else "--private")
+        except OnboardError as e:  # a timeout can hide a create that went through
+            raise OnboardError("%s; if %s now exists on GitHub, re-run with --url" % (e, new))
+        try:
+            url = _gh("repo", "view", new, "--json", "url", "--jq", ".url") + ".git"
+            _set_origin(root, current, url)
+        except (OnboardError, subprocess.SubprocessError) as e:
+            raise OnboardError("created %s but could not point origin at it (%s); re-run with --url" % (new, e))
+        return {"origin": url, "created": new}
+    if url is not None:
         rid = _remote_id(url)
         if rid is None or rid == (YAB_HOST, YAB_REPO):
             raise Refused("%r is not a network URL of a repository other than YAB" % url)
-    if url is None:
-        if current:
-            _git(root, "remote", "remove", "origin")
-    else:
-        _git(root, "remote", "set-url" if current else "add", "origin", url)
-    return {"origin": url, "created": create}
+        _set_origin(root, current, url)
+    elif current:
+        _git(root, "remote", "remove", "origin")
+    return {"origin": url, "created": None}
+
+
+def _set_origin(root: Path, current: str, url: str) -> None:
+    _git(root, "remote", "set-url" if current else "add", "origin", url)
+    # A leftover push URL would keep pushes going to YAB.
+    _git(root, "config", "--unset-all", "remote.origin.pushurl", allow_fail=True)
 
 
 def _resolve_root(arg: Optional[str]) -> Path:
@@ -625,7 +634,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub.add_parser("mark").add_argument("--force", action="store_true")
     rp = sub.add_parser("remote")
     how = rp.add_mutually_exclusive_group(required=True)
-    how.add_argument("--new", metavar="NAME", dest="create")
+    how.add_argument("--new", metavar="NAME")
     how.add_argument("--url")
     how.add_argument("--none", action="store_true")
     rp.add_argument("--public", action="store_true")
@@ -646,9 +655,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(json.dumps(apply(root), indent=2))
             return 0
         if args.cmd == "remote":
-            if args.public and args.create is None:
+            if args.public and args.new is None:
                 raise OnboardError("--public only goes with --new")
-            print(json.dumps(remote(root, args.create, args.url, args.none, args.public), indent=2))
+            print(json.dumps(remote(root, args.new, args.url, args.none, args.public), indent=2))
             return 0
         return mark(root, args.force)
     except Refused as e:

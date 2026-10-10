@@ -485,6 +485,10 @@ class WrapperTests(Base):
         mark(self.root)
         for var in ("GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE"):  # git would not use <project>/.git
             self.assertEqual(self.sh("PreToolUse", payload, python=missing, env_extra={var: self.tmp})[0], 2, var)
+        fake = self.root / "docs" / "nested"  # a .git dir git ignores (no HEAD): gate.py resolves the outer repo
+        (fake / ".git" / "yab").mkdir(parents=True)
+        (fake / ".git" / "yab" / "onboarded").write_text("x")
+        self.assertEqual(self.sh("PreToolUse", payload, python=missing, project_dir=fake)[0], 2)
         sub = self.root / "docs"  # launched from a subdirectory: no .git there
         self.assertEqual(self.sh("PreToolUse", payload, python=missing, project_dir=sub)[0], 2)
         git(self.root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x")

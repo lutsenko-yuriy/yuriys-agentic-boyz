@@ -31,7 +31,7 @@ class RemoteTests(unittest.TestCase):
 
     def test_create_private_by_default_and_repoints_origin(self):
         with self.fake_gh():
-            result = onboard.remote(self.root, create="proj")
+            result = onboard.remote(self.root, new="proj")
         self.assertEqual(self.gh_calls[0], ("repo", "create", "proj", "--private"))
         self.assertEqual(self.gh_calls[1], ("repo", "view", "proj", "--json", "url", "--jq", ".url"))
         self.assertEqual(origin(self.root), NEW_URL + ".git")
@@ -39,19 +39,42 @@ class RemoteTests(unittest.TestCase):
 
     def test_create_public(self):
         with self.fake_gh():
-            onboard.remote(self.root, create="me/proj", public=True)
+            onboard.remote(self.root, new="me/proj", public=True)
         self.assertEqual(self.gh_calls[0], ("repo", "create", "me/proj", "--public"))
 
     def test_create_adds_origin_when_there_is_none(self):
         git(self.root, "remote", "remove", "origin")
         with self.fake_gh():
-            onboard.remote(self.root, create="proj")
+            onboard.remote(self.root, new="proj")
         self.assertEqual(origin(self.root), NEW_URL + ".git")
 
     def test_gh_failure_leaves_origin_alone(self):
         with self.fake_gh(fail=True), self.assertRaises(onboard.OnboardError):
-            onboard.remote(self.root, create="proj")
+            onboard.remote(self.root, new="proj")
         self.assertEqual(origin(self.root), YAB_ORIGIN)
+
+    def test_push_url_follows_origin(self):
+        git(self.root, "remote", "set-url", "--push", "origin", YAB_ORIGIN)
+        onboard.remote(self.root, url=NEW_URL)
+        push = subprocess.run(["git", "-C", str(self.root), "remote", "get-url", "--push", "origin"],
+                              capture_output=True, text=True).stdout.strip()
+        self.assertEqual(push, NEW_URL)
+        with self.fake_gh():
+            git(self.root, "remote", "set-url", "origin", YAB_ORIGIN)
+            git(self.root, "remote", "set-url", "--push", "origin", YAB_ORIGIN)
+            onboard.remote(self.root, new="proj")
+        push = subprocess.run(["git", "-C", str(self.root), "remote", "get-url", "--push", "origin"],
+                              capture_output=True, text=True).stdout.strip()
+        self.assertEqual(push, NEW_URL + ".git")
+
+    def test_create_failure_hints_at_url(self):
+        with self.fake_gh(fail=True), self.assertRaisesRegex(onboard.OnboardError, "re-run with --url"):
+            onboard.remote(self.root, new="proj")
+
+    def test_set_url_failure_after_create_points_at_url(self):
+        git(self.root, "config", "--add", "remote.origin.url", YAB_ORIGIN)  # multi-valued: set-url refuses
+        with self.fake_gh(), self.assertRaisesRegex(onboard.OnboardError, "(?s)created proj .*--url"):
+            onboard.remote(self.root, new="proj")
 
     def test_view_failure_after_create_points_at_url(self):
         def gh(*a):
@@ -59,14 +82,14 @@ class RemoteTests(unittest.TestCase):
                 raise onboard.OnboardError("gh repo view failed")
             return ""
         with mock.patch.object(onboard, "_gh", side_effect=gh):
-            with self.assertRaisesRegex(onboard.OnboardError, "created proj .*--url"):
-                onboard.remote(self.root, create="proj")
+            with self.assertRaisesRegex(onboard.OnboardError, "(?s)created proj .*--url"):
+                onboard.remote(self.root, new="proj")
         self.assertEqual(origin(self.root), YAB_ORIGIN)
 
     def test_invalid_names_rejected_before_gh_runs(self):
         for bad in ["", "a b", "-x", "../x", "o/n/x", "x/", "/x", "a" * 101]:
             with self.fake_gh(), self.assertRaises(onboard.Refused, msg=bad):
-                onboard.remote(self.root, create=bad)
+                onboard.remote(self.root, new=bad)
         self.assertEqual(self.gh_calls, [])
 
     def test_url_sets_origin(self):
@@ -87,7 +110,7 @@ class RemoteTests(unittest.TestCase):
     def test_refuses_once_origin_is_not_yab(self):
         git(self.root, "remote", "set-url", "origin", "https://github.com/someone/else.git")
         with self.fake_gh():
-            for kwargs in ({"create": "proj"}, {"url": NEW_URL}, {"none": True}):
+            for kwargs in ({"new": "proj"}, {"url": NEW_URL}, {"none": True}):
                 with self.assertRaises(onboard.Refused, msg=kwargs):
                     onboard.remote(self.root, **kwargs)
         self.assertEqual(self.gh_calls, [])
