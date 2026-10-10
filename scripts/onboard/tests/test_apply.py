@@ -528,6 +528,70 @@ class LicenceAndSentinelTests(unittest.TestCase):
                 self.assertEqual(code, 0, err)
                 self.assertFalse(exists[".yab-template"])
 
+    CHANGELOG = "# Changelog\n\nIntro.\n\n---\n\n## [Unreleased]\n- YAB-1 [wip]\n\n---\n\n<!-- footer -->\n"
+    EMPTY = "# Changelog\n\nIntro.\n\n---\n\n<!-- footer -->\n"
+
+    def test_template_changelog_emptied_with_the_sentinel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github"), ".yab-template": YAB_SENTINEL,
+                                   "docs/CHANGELOG.md": self.CHANGELOG})
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            self.assertTrue(json.loads(out)["changelog_reset"])
+            self.assertEqual((root / "docs/CHANGELOG.md").read_text(), self.EMPTY)
+            (root / "docs/CHANGELOG.md").write_text(self.CHANGELOG)  # the project's own entries, after the first run
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertFalse(json.loads(out)["changelog_reset"])
+            self.assertEqual((root / "docs/CHANGELOG.md").read_text(), self.CHANGELOG)
+
+    def test_rerun_after_a_partial_apply_does_not_warn(self):
+        # The first run emptied the CHANGELOG but failed before removing the sentinel.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github"), ".yab-template": YAB_SENTINEL,
+                                   "docs/CHANGELOG.md": self.CHANGELOG})
+            (root / "docs/CHANGELOG.md").write_text(self.EMPTY)
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            self.assertEqual(json.loads(out)["warnings"], [])
+
+    def test_changelog_kept_without_sentinel_or_when_already_empty(self):
+        for label, files, text in [
+            ("no sentinel", {}, self.CHANGELOG),
+            ("already empty", {".yab-template": YAB_SENTINEL}, self.EMPTY),
+            ("foreign sentinel", {".yab-template": "repo=other/x\n"}, self.CHANGELOG),
+        ]:
+            with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
+                files = dict(files, **{"skill_router.toml": toml_text("github"), "docs/CHANGELOG.md": text})
+                root = make_repo(tmp, files)
+                code, out, err = run_apply(root, "--root", str(root))
+                self.assertEqual(code, 0, err)
+                self.assertFalse(json.loads(out)["changelog_reset"])
+                self.assertEqual((root / "docs/CHANGELOG.md").read_text(), text)
+
+    def test_unstaged_changelog_edits_are_kept_and_warned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github"), ".yab-template": YAB_SENTINEL,
+                                   "docs/CHANGELOG.md": self.CHANGELOG})
+            edited = self.CHANGELOG.replace("- YAB-1", "- mine\n- YAB-1")
+            (root / "docs/CHANGELOG.md").write_text(edited)
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            report = json.loads(out)
+            self.assertFalse(report["changelog_reset"])
+            self.assertIn("unstaged edits", " ".join(report["warnings"]))
+            self.assertEqual((root / "docs/CHANGELOG.md").read_text(), edited)
+
+    def test_staged_only_changelog_is_emptied(self):
+        # The ZIP flow: `git init` and `git add -A`, no commit yet.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github"), ".yab-template": YAB_SENTINEL})
+            (root / "docs/CHANGELOG.md").write_text(self.CHANGELOG)
+            git(root, "add", "docs/CHANGELOG.md")
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            self.assertTrue(json.loads(out)["changelog_reset"])
+            self.assertEqual((root / "docs/CHANGELOG.md").read_text(), self.EMPTY)
+
     def test_no_sentinel_is_fine(self):
         code, err, exists, _ = self.run_case()
         self.assertEqual(code, 0, err)

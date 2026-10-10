@@ -40,12 +40,14 @@ KNOWN_PLACEHOLDERS = [
 PLACEHOLDER_RE = re.compile(r"(?<![{$])\{\{(?:%s)\}\}(?!\})" % "|".join(KNOWN_PLACEHOLDERS))
 # Historical text may quote placeholders legitimately; knowledge-base READMEs/TEMPLATEs are real templates.
 SCAN_SKIP_DIRS = ("scripts/onboard/", "docs/knowledge/")
-SCAN_SKIP_FILES = {"docs/CHANGELOG.md"}
+CHANGELOG = "docs/CHANGELOG.md"
+SCAN_SKIP_FILES = {CHANGELOG}
 SCAN_KEEP_NAMES = {"README.md", "TEMPLATE.md"}
 YAB_HOST = "github.com"
 YAB_REPO = "lutsenko-yuriy/yuriys-agentic-boyz"
 MAX_SCAN_BYTES = 1_000_000
 TEMPLATE_MARKER = "<!-- yab:template -->"
+TEMPLATE_README_TITLE = "Multi-Agent Project Template"
 ARTIFACTS = ["docs/TECH_STACK.md", "docs/CODE_STYLE.md", "docs/CONSTRAINTS.md"]
 # The <...> tokens the shipped templates use (outside comments); a test keeps this in sync with the templates.
 TEMPLATE_TOKENS = [
@@ -213,6 +215,24 @@ def _strip_comments(text: str) -> str:
     return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
 
+def _template_readme(root: Path) -> bool:
+    try:
+        text = _read_regular(root / "README.md")
+    except (UnicodeDecodeError, OSError):
+        return False
+    first = next((ln.strip() for ln in (text or "").splitlines() if ln.strip()), "")
+    return first == "# " + TEMPLATE_README_TITLE
+
+
+def _empty_changelog(text: str) -> str:
+    """YAB's own entries dropped: the intro through the first `---` rule, then whatever follows the last one."""
+    lines = text.splitlines(keepends=True)
+    rules = [i for i, ln in enumerate(lines) if ln.strip() == "---"]
+    if len(rules) < 2:
+        return text
+    return "".join(lines[:rules[0] + 1] + lines[rules[-1] + 1:])
+
+
 def _template_tokens(text: str) -> List[str]:
     text = re.sub(r"^(```|~~~).*?^\1[^\n]*$|(`+)[^`].*?\2(?!`)", "", _strip_comments(text),
                   flags=re.DOTALL | re.MULTILINE)
@@ -265,18 +285,24 @@ def _remote_id(url: str) -> Optional[tuple]:
     return {"ssh.github.com": "github.com"}.get(host, host), path
 
 
+def _yab_sentinel(root: Path) -> bool:
+    sentinel = root / ".yab-template"
+    if not sentinel.is_file():
+        return False
+    fields = dict(ln.split("=", 1) for ln in sentinel.read_text(encoding="utf-8", errors="replace").splitlines() if "=" in ln)
+    return fields.get("repo", "").strip().lower() == YAB_REPO
+
+
 def _template_mode(root: Path, errors: List[str]) -> bool:
     """The sentinel only counts when origin is YAB; adopters commonly keep YAB as `upstream`, so other remotes don't.
 
     A plain `git clone` of YAB being turned into a new project looks like YAB until its origin changes; in a YAB fork
     a human marks with `mark --force` from a terminal.
     """
-    sentinel = root / ".yab-template"
-    if not sentinel.exists():
+    if not (root / ".yab-template").exists():
         return False
-    fields = dict(ln.split("=", 1) for ln in sentinel.read_text(encoding="utf-8", errors="replace").splitlines() if "=" in ln)
     origin = _git(root, "remote", "get-url", "origin", allow_fail=True)
-    if fields.get("repo", "").strip().lower() == YAB_REPO and _remote_id(origin) == (YAB_HOST, YAB_REPO):
+    if _yab_sentinel(root) and _remote_id(origin) == (YAB_HOST, YAB_REPO):
         return True
     errors.append(
         ".yab-template present but origin is not %s/%s: delete it if this project was created from YAB "
@@ -373,6 +399,8 @@ def check(root: Path) -> Dict[str, Any]:
                 errors.append("%s still contains <...> template tokens (e.g. %s)" % (rel, tokens[0]))
         elif not template_mode:
             errors.append("%s is still a template" % rel)
+    if not template_mode and _template_readme(root):
+        errors.append('README.md is still the YAB template README ("%s"): write the project\'s own' % TEMPLATE_README_TITLE)
     config_errors: List[str] = []
     prefix = _check_config(root, config_errors)
     if not template_mode:
@@ -487,9 +515,12 @@ def apply(root: Path) -> Dict[str, Any]:
     values = _values(project, pm)
     warnings = ["skill_router.toml: unknown project.%s ignored" % k for k in sorted(set(project) - PROJECT_KEYS)]
     mcp = _plan_mcp(root, pm)
+    sentinel = root / ".yab-template"
+    sentinel_deleted = os.path.lexists(sentinel) and not sentinel.is_dir()
     edits: Dict[str, str] = {}
     unresolved: Dict[str, List[str]] = {}
-    for rel in _tracked_files(root):
+    tracked = _tracked_files(root)
+    for rel in tracked:
         if not _scanned(rel):
             continue
         try:
@@ -504,6 +535,21 @@ def apply(root: Path) -> Dict[str, Any]:
         left = sorted(set(PLACEHOLDER_RE.findall(new)))
         if left:
             unresolved[rel] = left
+    # A template clone's CHANGELOG is YAB's history. Only a YAB sentinel qualifies, and unstaged edits are kept (a
+    # staged-only file still counts: the ZIP flow has no commit yet); once the sentinel is gone the project's own stay.
+    changelog_reset = False
+    if sentinel_deleted and _yab_sentinel(root) and CHANGELOG in tracked:
+        try:
+            text = _read_regular(root / CHANGELOG)
+        except (UnicodeDecodeError, OSError):
+            text = None
+        if text is not None and _empty_changelog(text) != text:
+            if _git(root, "diff", "--name-only", "--", CHANGELOG):
+                warnings.append("%s has unstaged edits, so it was not emptied: remove the template's entries once "
+                                "onboarding is done" % CHANGELOG)
+            else:
+                edits[CHANGELOG] = _empty_changelog(text)
+                changelog_reset = True
     for rel, text in edits.items():
         _write_atomic(root / rel, text)
     if mcp == "":
@@ -514,12 +560,11 @@ def apply(root: Path) -> Dict[str, Any]:
     license_deleted = not keep_licence and (license_path.is_symlink() or license_path.is_file())
     if license_deleted:
         os.unlink(license_path)
-    sentinel = root / ".yab-template"
-    sentinel_deleted = os.path.lexists(sentinel) and not sentinel.is_dir()
     if sentinel_deleted:
         os.unlink(sentinel)
     return {
         "changed": sorted(edits),
+        "changelog_reset": changelog_reset,
         "unresolved": unresolved,
         "mcp": "deleted" if mcp == "" else "unchanged" if mcp is None else "written",
         "license_deleted": license_deleted,

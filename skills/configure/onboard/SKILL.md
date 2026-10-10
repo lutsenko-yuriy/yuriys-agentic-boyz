@@ -25,6 +25,7 @@ Only these files. Everything else is filled by `onboard.py apply`.
 - `AGENTS.md`
 - `docs/MODEL_TIERS.md`
 - `CLAUDE.local.md`
+- `README.md`
 <!-- /onboard:writes -->
 
 ## Commands
@@ -111,7 +112,7 @@ Proposed defaults: `ai_commit_trailer` is the current agent's trailer line (for 
 
 ### 4. Apply
 
-Run `apply`. It substitutes the `[project]` values everywhere, reconciles `.mcp.json` with `pm` and clears the template sentinel. Report its `changed`, `unresolved` and `warnings`. Re-running is safe.
+Run `apply`. It substitutes the `[project]` values everywhere, reconciles `.mcp.json` with `pm` and clears the template sentinel; in a template clone it also empties the template's `docs/CHANGELOG.md` (`changelog_reset`). Report its `changed`, `unresolved` and `warnings`. Re-running is safe.
 
 `apply` supplies every placeholder that has a `[project]` key. The one placeholder it never supplies is `CODE_STYLE` in `AGENTS.md`, which step 6 handles. If `unresolved` lists anything else, correct the value in `skill_router.toml` and re-run `apply`; values for `skills/shared/project-config.md` (test, version, QA fields) come from there too, so that file needs no hand edit.
 
@@ -128,6 +129,7 @@ In all three, strip the `<!-- yab:template -->` marker line, every `<...>` token
 ### 6. Architecture and agent docs
 
 - Edit `docs/ARCHITECTURE.md`: the real directory tree, layers and dependencies, taken from the repo, go in place of the guidance comments. Keep it short and factual.
+- If `README.md` is still the YAB template README (titled "Multi-Agent Project Template"), Write `README.md` for the project instead (`check` fails until you do): the name and description from `[project]`; "Running it" and "Testing" with the commands from TECH_STACK's Tooling section; a short "Architecture" paragraph pointing to `docs/ARCHITECTURE.md`; and "Working on this project with Claude Code": launch Claude Code from the repo root, run `/onboard` once per clone (a gate blocks most work until then), start with `/summarize`, and the issue tracker (`pm_project_url`). Keep the template's licence badge only if `keep_licence` is true. Any other README is the project's own: leave it.
 - Edit `AGENTS.md`: the Common Commands (`<test command>`, `<lint command>`, `<build command>`, `<install command>`) come from TECH_STACK's Tooling section, and a one-line summary of the Base standard takes the place of the `CODE_STYLE` placeholder line under "Code style".
 
 ### 7. Model tiers

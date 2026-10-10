@@ -291,6 +291,14 @@ class CheckTests(unittest.TestCase):
         self.assertNotIn("HL-2.md", self.msgs(r, "warnings"))
         self.assertNotIn("INDEX.md", self.msgs(r, "warnings"))
 
+    def test_template_readme_is_an_error_outside_template_mode(self):
+        readme = "\n# Multi-Agent Project Template\n\nA GitHub template.\n"
+        self.assertIn("README.md is still the YAB template README", self.msgs(self.check({"README.md": readme})))
+        r = self.check({"README.md": readme, ".yab-template": YAB_SENTINEL}, origin=YAB_ORIGIN)
+        self.assertTrue(r["ok"], r)
+        for own in ["# Demo\n\nMulti-Agent Project Template, renamed.\n", "# Multi-Agent Project Template fork\n"]:
+            self.assertTrue(self.check({"README.md": own})["ok"], own)
+
     def test_template_mode_sentinel(self):
         r = self.check({".yab-template": YAB_SENTINEL}, origin=YAB_ORIGIN)
         self.assertTrue(r["template_mode"])

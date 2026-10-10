@@ -52,7 +52,7 @@ ONBOARD_SKILL = "onboard"
 # The artifacts /onboard writes; everything else is filled by `onboard.py apply`. Single source of truth.
 BOOTSTRAP_PATHS = tuple(onboard.ARTIFACTS) + (
     "docs/ARCHITECTURE.md", "AGENTS.md", "skill_router.toml", "skills/shared/project-config.md",
-    "skills/shared/pm-tool-mapping.md", "docs/MODEL_TIERS.md", "CLAUDE.local.md",
+    "skills/shared/pm-tool-mapping.md", "docs/MODEL_TIERS.md", "CLAUDE.local.md", "README.md",
 )
 WRITE_TOOLS = {"Edit": "file_path", "Write": "file_path", "MultiEdit": "file_path", "NotebookEdit": "notebook_path"}
 MCP_READ_PREFIXES = ("get_", "list_", "search_", "extract_")

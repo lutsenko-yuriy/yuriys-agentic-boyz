@@ -393,6 +393,24 @@ class TemplateFlowTest(unittest.TestCase):
             self.assertFalse((root / ".yab-template").exists())
             self.assertFalse(any(".yab-template" in e for e in onboard.check(root)["errors"]))
 
+    @template_only
+    def test_new_project_gets_an_empty_changelog_and_must_replace_the_readme(self):
+        # Template-only: an onboarded project's CHANGELOG and README are already its own.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_clone(tmp, "https://github.com/me/proj.git", sentinel=True)
+            write_config(root)
+            self.assertTrue(onboard.apply(root)["changelog_reset"])
+            self.assertNotIn("## [Unreleased]", (root / "docs/CHANGELOG.md").read_text())
+            errors = onboard.check(root)["errors"]
+            self.assertTrue(any(e.startswith("README.md is still the YAB template README") for e in errors))
+
+    @template_only
+    def test_readme_step_names_the_template_title(self):
+        title = onboard.TEMPLATE_README_TITLE
+        self.assertTrue((ROOT / "README.md").read_text(encoding="utf-8").startswith("# %s\n" % title))
+        self.assertIn('Write `README.md` for the project', SKILL.read_text(encoding="utf-8"))
+        self.assertIn('titled "%s"' % title, SKILL.read_text(encoding="utf-8"))
+
     def test_origin_not_yab_never_asks_the_template_question(self):
         text = SKILL.read_text(encoding="utf-8")
         self.assertIn("`template_mode` is true", text)
