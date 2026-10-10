@@ -535,18 +535,20 @@ def apply(root: Path) -> Dict[str, Any]:
         left = sorted(set(PLACEHOLDER_RE.findall(new)))
         if left:
             unresolved[rel] = left
-    # A template clone's CHANGELOG is YAB's history. Only a YAB sentinel and a committed CHANGELOG qualify, so a
-    # foreign sentinel or local edits never lose entries; once the sentinel is gone the project's own are kept.
+    # A template clone's CHANGELOG is YAB's history. Only a YAB sentinel qualifies, and unstaged edits are kept (a
+    # staged-only file still counts: the ZIP flow has no commit yet); once the sentinel is gone the project's own stay.
     changelog_reset = False
-    if (sentinel_deleted and _yab_sentinel(root) and CHANGELOG in tracked
-            and not _git(root, "status", "--porcelain", "--", CHANGELOG, allow_fail=True)):
-        try:
-            text = _read_regular(root / CHANGELOG)
-        except (UnicodeDecodeError, OSError):
-            text = None
-        if text is not None and _empty_changelog(text) != text:
-            edits[CHANGELOG] = _empty_changelog(text)
-            changelog_reset = True
+    if sentinel_deleted and _yab_sentinel(root) and CHANGELOG in tracked:
+        if _git(root, "diff", "--name-only", "--", CHANGELOG):
+            warnings.append("%s has unstaged edits, so it was not emptied: remove the template's entries by hand" % CHANGELOG)
+        else:
+            try:
+                text = _read_regular(root / CHANGELOG)
+            except (UnicodeDecodeError, OSError):
+                text = None
+            if text is not None and _empty_changelog(text) != text:
+                edits[CHANGELOG] = _empty_changelog(text)
+                changelog_reset = True
     for rel, text in edits.items():
         _write_atomic(root / rel, text)
     if mcp == "":

@@ -558,7 +558,7 @@ class LicenceAndSentinelTests(unittest.TestCase):
                 self.assertFalse(json.loads(out)["changelog_reset"])
                 self.assertEqual((root / "docs/CHANGELOG.md").read_text(), text)
 
-    def test_uncommitted_changelog_edits_are_kept(self):
+    def test_unstaged_changelog_edits_are_kept_and_warned(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_repo(tmp, {"skill_router.toml": toml_text("github"), ".yab-template": YAB_SENTINEL,
                                    "docs/CHANGELOG.md": self.CHANGELOG})
@@ -566,8 +566,21 @@ class LicenceAndSentinelTests(unittest.TestCase):
             (root / "docs/CHANGELOG.md").write_text(edited)
             code, out, err = run_apply(root, "--root", str(root))
             self.assertEqual(code, 0, err)
-            self.assertFalse(json.loads(out)["changelog_reset"])
+            report = json.loads(out)
+            self.assertFalse(report["changelog_reset"])
+            self.assertIn("unstaged edits", " ".join(report["warnings"]))
             self.assertEqual((root / "docs/CHANGELOG.md").read_text(), edited)
+
+    def test_staged_only_changelog_is_emptied(self):
+        # The ZIP flow: `git init` and `git add -A`, no commit yet.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github"), ".yab-template": YAB_SENTINEL})
+            (root / "docs/CHANGELOG.md").write_text(self.CHANGELOG)
+            git(root, "add", "docs/CHANGELOG.md")
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            self.assertTrue(json.loads(out)["changelog_reset"])
+            self.assertEqual((root / "docs/CHANGELOG.md").read_text(), self.EMPTY)
 
     def test_no_sentinel_is_fine(self):
         code, err, exists, _ = self.run_case()

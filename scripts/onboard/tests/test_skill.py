@@ -398,8 +398,6 @@ class TemplateFlowTest(unittest.TestCase):
         # Template-only: an onboarded project's CHANGELOG and README are already its own.
         with tempfile.TemporaryDirectory() as tmp:
             root = make_clone(tmp, "https://github.com/me/proj.git", sentinel=True)
-            subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "clone"],
-                           check=True)  # apply only empties a committed CHANGELOG
             write_config(root)
             self.assertTrue(onboard.apply(root)["changelog_reset"])
             self.assertNotIn("## [Unreleased]", (root / "docs/CHANGELOG.md").read_text())
