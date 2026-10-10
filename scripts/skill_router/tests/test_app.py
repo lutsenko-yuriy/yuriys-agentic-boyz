@@ -115,6 +115,15 @@ class TestRun(unittest.TestCase):
             self.assertEqual(self._run(["skill_router", "fake/SKILL.md"]), 2)
         self.assertIn("does not supply context", stderr.getvalue())
 
+    @patch(f"{_MOD}._make_provider", return_value=(MagicMock(spec=["group_name", "validate", "fetch_context"]), None))
+    @patch(f"{_MOD}.read_frontmatter", return_value=_FM_WITH_CONTEXT)
+    @patch("pathlib.Path.exists", return_value=True)
+    def test_context_provider_without_format_context_returns_2(self, *_):
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            self.assertEqual(self._run(["skill_router", "fake/SKILL.md"]), 2)
+        self.assertIn("does not supply context", stderr.getvalue())
+
     @patch(f"{_MOD}.read_frontmatter", return_value=_FM_WITH_CONTEXT)
     @patch("pathlib.Path.exists", return_value=True)
     def test_context_linear_returns_1_on_fetch_error(self, *_):
