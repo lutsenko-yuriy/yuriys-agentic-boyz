@@ -1,4 +1,6 @@
+import io
 import unittest
+from contextlib import redirect_stderr
 from unittest.mock import MagicMock, patch
 
 from skill_router.app import run
@@ -8,6 +10,7 @@ from .fixtures import (
     _FM_NO_EFFORT,
     _FM_FOCUSED,
     _FM_WITH_CONTEXT,
+    _FM_WITH_CONTEXT_GITHUB,
     _FM_WITH_TOOLS_LINEAR,
     _FM_WITH_TOOLS_GITHUB,
 )
@@ -103,6 +106,14 @@ class TestRun(unittest.TestCase):
     def test_context_linear_returns_2_without_api_key(self, *_):
         with patch.dict("os.environ", {}, clear=True):
             self.assertEqual(self._run(["skill_router", "fake/SKILL.md"]), 2)
+
+    @patch(f"{_MOD}.read_frontmatter", return_value=_FM_WITH_CONTEXT_GITHUB)
+    @patch("pathlib.Path.exists", return_value=True)
+    def test_context_provider_without_context_support_returns_2(self, *_):
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            self.assertEqual(self._run(["skill_router", "fake/SKILL.md"]), 2)
+        self.assertIn("does not supply context", stderr.getvalue())
 
     @patch(f"{_MOD}.read_frontmatter", return_value=_FM_WITH_CONTEXT)
     @patch("pathlib.Path.exists", return_value=True)

@@ -27,3 +27,5 @@ jobs:
           git config --global init.defaultBranch main
       - name: Run onboard tests
         run: python -W error -m unittest discover -s scripts/onboard/tests -t .
+      - name: Run skill_router tests
+        run: python -W error -m unittest discover -s scripts/skill_router/tests -t scripts

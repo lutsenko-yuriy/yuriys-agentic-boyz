@@ -56,6 +56,13 @@ def run(argv: list[str]) -> int:
         if err:
             print(f"[skill_router] {err}", file=sys.stderr)
             return 2
+        if not hasattr(ctx_provider, "fetch_context"):
+            print(
+                f"[skill_router] Provider '{ctx_provider.group_name}' (from context '{context}') "
+                "does not supply context — run this skill inside Claude Code",
+                file=sys.stderr,
+            )
+            return 2
         err = ctx_provider.validate()
         if err:
             print(f"[skill_router] {err}", file=sys.stderr)
