@@ -389,9 +389,21 @@ class TemplateFlowTest(unittest.TestCase):
             self.assertFalse(result["template_mode"])
             self.assertTrue(any(".yab-template present" in e for e in result["errors"]))
             write_config(root)
-            self.assertTrue(onboard.apply(root)["sentinel_deleted"])
+            result = onboard.apply(root)
+            self.assertTrue(result["sentinel_deleted"])
+            self.assertTrue(result["changelog_reset"])
+            self.assertNotIn("## [Unreleased]", (root / "docs/CHANGELOG.md").read_text())
             self.assertFalse((root / ".yab-template").exists())
-            self.assertFalse(any(".yab-template" in e for e in onboard.check(root)["errors"]))
+            errors = onboard.check(root)["errors"]
+            self.assertFalse(any(".yab-template" in e for e in errors))
+            self.assertTrue(any(e.startswith("README.md is still the YAB template README") for e in errors))
+
+    @template_only
+    def test_readme_step_names_the_template_title(self):
+        title = onboard.TEMPLATE_README_TITLE
+        self.assertTrue((ROOT / "README.md").read_text(encoding="utf-8").startswith("# %s\n" % title))
+        self.assertIn('Write `README.md` for the project', SKILL.read_text(encoding="utf-8"))
+        self.assertIn('titled "%s"' % title, SKILL.read_text(encoding="utf-8"))
 
     def test_origin_not_yab_never_asks_the_template_question(self):
         text = SKILL.read_text(encoding="utf-8")

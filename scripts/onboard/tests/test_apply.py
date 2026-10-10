@@ -528,6 +528,35 @@ class LicenceAndSentinelTests(unittest.TestCase):
                 self.assertEqual(code, 0, err)
                 self.assertFalse(exists[".yab-template"])
 
+    CHANGELOG = "# Changelog\n\nIntro.\n\n---\n\n## [Unreleased]\n- YAB-1 [wip]\n\n---\n\n<!-- footer -->\n"
+    EMPTY = "# Changelog\n\nIntro.\n\n---\n\n<!-- footer -->\n"
+
+    def test_template_changelog_emptied_with_the_sentinel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github"), ".yab-template": YAB_SENTINEL,
+                                   "docs/CHANGELOG.md": self.CHANGELOG})
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            self.assertTrue(json.loads(out)["changelog_reset"])
+            self.assertEqual((root / "docs/CHANGELOG.md").read_text(), self.EMPTY)
+            (root / "docs/CHANGELOG.md").write_text(self.CHANGELOG)  # the project's own entries, after the first run
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertFalse(json.loads(out)["changelog_reset"])
+            self.assertEqual((root / "docs/CHANGELOG.md").read_text(), self.CHANGELOG)
+
+    def test_changelog_kept_without_sentinel_or_when_already_empty(self):
+        for label, files, text in [
+            ("no sentinel", {}, self.CHANGELOG),
+            ("already empty", {".yab-template": YAB_SENTINEL}, self.EMPTY),
+        ]:
+            with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
+                files = dict(files, **{"skill_router.toml": toml_text("github"), "docs/CHANGELOG.md": text})
+                root = make_repo(tmp, files)
+                code, out, err = run_apply(root, "--root", str(root))
+                self.assertEqual(code, 0, err)
+                self.assertFalse(json.loads(out)["changelog_reset"])
+                self.assertEqual((root / "docs/CHANGELOG.md").read_text(), text)
+
     def test_no_sentinel_is_fine(self):
         code, err, exists, _ = self.run_case()
         self.assertEqual(code, 0, err)

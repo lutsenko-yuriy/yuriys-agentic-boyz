@@ -46,6 +46,8 @@ YAB_HOST = "github.com"
 YAB_REPO = "lutsenko-yuriy/yuriys-agentic-boyz"
 MAX_SCAN_BYTES = 1_000_000
 TEMPLATE_MARKER = "<!-- yab:template -->"
+TEMPLATE_README_TITLE = "Multi-Agent Project Template"
+CHANGELOG = "docs/CHANGELOG.md"
 ARTIFACTS = ["docs/TECH_STACK.md", "docs/CODE_STYLE.md", "docs/CONSTRAINTS.md"]
 # The <...> tokens the shipped templates use (outside comments); a test keeps this in sync with the templates.
 TEMPLATE_TOKENS = [
@@ -213,6 +215,24 @@ def _strip_comments(text: str) -> str:
     return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
 
 
+def _template_readme(root: Path) -> bool:
+    try:
+        text = _read_regular(root / "README.md")
+    except (UnicodeDecodeError, OSError):
+        return False
+    first = next((ln.strip() for ln in (text or "").splitlines() if ln.strip()), "")
+    return first == "# " + TEMPLATE_README_TITLE
+
+
+def _empty_changelog(text: str) -> str:
+    """YAB's own entries dropped: the intro through the first `---` rule, then whatever follows the last one."""
+    lines = text.splitlines(keepends=True)
+    rules = [i for i, ln in enumerate(lines) if ln.strip() == "---"]
+    if len(rules) < 2:
+        return text
+    return "".join(lines[:rules[0] + 1] + lines[rules[-1] + 1:])
+
+
 def _template_tokens(text: str) -> List[str]:
     text = re.sub(r"^(```|~~~).*?^\1[^\n]*$|(`+)[^`].*?\2(?!`)", "", _strip_comments(text),
                   flags=re.DOTALL | re.MULTILINE)
@@ -373,6 +393,8 @@ def check(root: Path) -> Dict[str, Any]:
                 errors.append("%s still contains <...> template tokens (e.g. %s)" % (rel, tokens[0]))
         elif not template_mode:
             errors.append("%s is still a template" % rel)
+    if not template_mode and _template_readme(root):
+        errors.append('README.md is still the YAB template README ("%s"): write the project\'s own' % TEMPLATE_README_TITLE)
     config_errors: List[str] = []
     prefix = _check_config(root, config_errors)
     if not template_mode:
@@ -487,9 +509,12 @@ def apply(root: Path) -> Dict[str, Any]:
     values = _values(project, pm)
     warnings = ["skill_router.toml: unknown project.%s ignored" % k for k in sorted(set(project) - PROJECT_KEYS)]
     mcp = _plan_mcp(root, pm)
+    sentinel = root / ".yab-template"
+    sentinel_deleted = os.path.lexists(sentinel) and not sentinel.is_dir()
     edits: Dict[str, str] = {}
     unresolved: Dict[str, List[str]] = {}
-    for rel in _tracked_files(root):
+    tracked = _tracked_files(root)
+    for rel in tracked:
         if not _scanned(rel):
             continue
         try:
@@ -504,6 +529,16 @@ def apply(root: Path) -> Dict[str, Any]:
         left = sorted(set(PLACEHOLDER_RE.findall(new)))
         if left:
             unresolved[rel] = left
+    # A template clone's CHANGELOG is YAB's history; once the sentinel is gone the project's own entries are kept.
+    changelog_reset = False
+    if sentinel_deleted and CHANGELOG in tracked:
+        try:
+            text = _read_regular(root / CHANGELOG)
+        except (UnicodeDecodeError, OSError):
+            text = None
+        if text is not None and _empty_changelog(text) != text:
+            edits[CHANGELOG] = _empty_changelog(text)
+            changelog_reset = True
     for rel, text in edits.items():
         _write_atomic(root / rel, text)
     if mcp == "":
@@ -514,12 +549,11 @@ def apply(root: Path) -> Dict[str, Any]:
     license_deleted = not keep_licence and (license_path.is_symlink() or license_path.is_file())
     if license_deleted:
         os.unlink(license_path)
-    sentinel = root / ".yab-template"
-    sentinel_deleted = os.path.lexists(sentinel) and not sentinel.is_dir()
     if sentinel_deleted:
         os.unlink(sentinel)
     return {
         "changed": sorted(edits),
+        "changelog_reset": changelog_reset,
         "unresolved": unresolved,
         "mcp": "deleted" if mcp == "" else "unchanged" if mcp is None else "written",
         "license_deleted": license_deleted,

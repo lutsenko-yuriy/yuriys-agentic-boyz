@@ -36,9 +36,10 @@ It probes your machine, infers the stack from the repo, asks only what it cannot
 - `skill_router.toml` `[project]` (name, issue prefix, git host, test command, and so on) and `[providers].pm` (`linear` or `github`)
 - `docs/TECH_STACK.md`, `docs/CODE_STYLE.md`, `docs/CONSTRAINTS.md`
 - `docs/ARCHITECTURE.md`, the Common Commands in `AGENTS.md`, and the model tier mapping in `docs/MODEL_TIERS.md`
+- in a project created from this template, a `README.md` of its own in place of this one
 - optionally a gitignored `CLAUDE.local.md` with per-machine settings
 
-`onboard.py apply` then fills the `[project]` values into the template placeholders in tracked files (except `scripts/onboard/`, `docs/knowledge/` and `docs/CHANGELOG.md`; re-running is safe), reconciles `.mcp.json` with your PM tool, deletes `LICENSE` if `keep_licence = false`, and removes the `.yab-template` sentinel. `onboard.py check` reports what is left; `onboard.py mark` refuses until it is clean.
+`onboard.py apply` then fills the `[project]` values into the template placeholders in tracked files (except `scripts/onboard/`, `docs/knowledge/` and `docs/CHANGELOG.md`; re-running is safe), reconciles `.mcp.json` with your PM tool, deletes `LICENSE` if `keep_licence = false`, and removes the `.yab-template` sentinel. On that first run it also empties `docs/CHANGELOG.md`, which until then holds this template's history. `onboard.py check` reports what is left; `onboard.py mark` refuses until it is clean.
 
 ### Steps you do yourself
 
