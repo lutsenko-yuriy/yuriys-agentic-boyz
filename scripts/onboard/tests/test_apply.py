@@ -548,6 +548,7 @@ class LicenceAndSentinelTests(unittest.TestCase):
         for label, files, text in [
             ("no sentinel", {}, self.CHANGELOG),
             ("already empty", {".yab-template": YAB_SENTINEL}, self.EMPTY),
+            ("foreign sentinel", {".yab-template": "repo=other/x\n"}, self.CHANGELOG),
         ]:
             with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
                 files = dict(files, **{"skill_router.toml": toml_text("github"), "docs/CHANGELOG.md": text})
@@ -556,6 +557,17 @@ class LicenceAndSentinelTests(unittest.TestCase):
                 self.assertEqual(code, 0, err)
                 self.assertFalse(json.loads(out)["changelog_reset"])
                 self.assertEqual((root / "docs/CHANGELOG.md").read_text(), text)
+
+    def test_uncommitted_changelog_edits_are_kept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github"), ".yab-template": YAB_SENTINEL,
+                                   "docs/CHANGELOG.md": self.CHANGELOG})
+            edited = self.CHANGELOG.replace("- YAB-1", "- mine\n- YAB-1")
+            (root / "docs/CHANGELOG.md").write_text(edited)
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            self.assertFalse(json.loads(out)["changelog_reset"])
+            self.assertEqual((root / "docs/CHANGELOG.md").read_text(), edited)
 
     def test_no_sentinel_is_fine(self):
         code, err, exists, _ = self.run_case()

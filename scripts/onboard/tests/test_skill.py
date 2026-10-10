@@ -389,13 +389,21 @@ class TemplateFlowTest(unittest.TestCase):
             self.assertFalse(result["template_mode"])
             self.assertTrue(any(".yab-template present" in e for e in result["errors"]))
             write_config(root)
-            result = onboard.apply(root)
-            self.assertTrue(result["sentinel_deleted"])
-            self.assertTrue(result["changelog_reset"])
-            self.assertNotIn("## [Unreleased]", (root / "docs/CHANGELOG.md").read_text())
+            self.assertTrue(onboard.apply(root)["sentinel_deleted"])
             self.assertFalse((root / ".yab-template").exists())
+            self.assertFalse(any(".yab-template" in e for e in onboard.check(root)["errors"]))
+
+    @template_only
+    def test_new_project_gets_an_empty_changelog_and_must_replace_the_readme(self):
+        # Template-only: an onboarded project's CHANGELOG and README are already its own.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_clone(tmp, "https://github.com/me/proj.git", sentinel=True)
+            subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "clone"],
+                           check=True)  # apply only empties a committed CHANGELOG
+            write_config(root)
+            self.assertTrue(onboard.apply(root)["changelog_reset"])
+            self.assertNotIn("## [Unreleased]", (root / "docs/CHANGELOG.md").read_text())
             errors = onboard.check(root)["errors"]
-            self.assertFalse(any(".yab-template" in e for e in errors))
             self.assertTrue(any(e.startswith("README.md is still the YAB template README") for e in errors))
 
     @template_only

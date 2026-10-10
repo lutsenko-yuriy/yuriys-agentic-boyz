@@ -40,14 +40,14 @@ KNOWN_PLACEHOLDERS = [
 PLACEHOLDER_RE = re.compile(r"(?<![{$])\{\{(?:%s)\}\}(?!\})" % "|".join(KNOWN_PLACEHOLDERS))
 # Historical text may quote placeholders legitimately; knowledge-base READMEs/TEMPLATEs are real templates.
 SCAN_SKIP_DIRS = ("scripts/onboard/", "docs/knowledge/")
-SCAN_SKIP_FILES = {"docs/CHANGELOG.md"}
+CHANGELOG = "docs/CHANGELOG.md"
+SCAN_SKIP_FILES = {CHANGELOG}
 SCAN_KEEP_NAMES = {"README.md", "TEMPLATE.md"}
 YAB_HOST = "github.com"
 YAB_REPO = "lutsenko-yuriy/yuriys-agentic-boyz"
 MAX_SCAN_BYTES = 1_000_000
 TEMPLATE_MARKER = "<!-- yab:template -->"
 TEMPLATE_README_TITLE = "Multi-Agent Project Template"
-CHANGELOG = "docs/CHANGELOG.md"
 ARTIFACTS = ["docs/TECH_STACK.md", "docs/CODE_STYLE.md", "docs/CONSTRAINTS.md"]
 # The <...> tokens the shipped templates use (outside comments); a test keeps this in sync with the templates.
 TEMPLATE_TOKENS = [
@@ -285,18 +285,24 @@ def _remote_id(url: str) -> Optional[tuple]:
     return {"ssh.github.com": "github.com"}.get(host, host), path
 
 
+def _yab_sentinel(root: Path) -> bool:
+    sentinel = root / ".yab-template"
+    if not sentinel.is_file():
+        return False
+    fields = dict(ln.split("=", 1) for ln in sentinel.read_text(encoding="utf-8", errors="replace").splitlines() if "=" in ln)
+    return fields.get("repo", "").strip().lower() == YAB_REPO
+
+
 def _template_mode(root: Path, errors: List[str]) -> bool:
     """The sentinel only counts when origin is YAB; adopters commonly keep YAB as `upstream`, so other remotes don't.
 
     A plain `git clone` of YAB being turned into a new project looks like YAB until its origin changes; in a YAB fork
     a human marks with `mark --force` from a terminal.
     """
-    sentinel = root / ".yab-template"
-    if not sentinel.exists():
+    if not (root / ".yab-template").exists():
         return False
-    fields = dict(ln.split("=", 1) for ln in sentinel.read_text(encoding="utf-8", errors="replace").splitlines() if "=" in ln)
     origin = _git(root, "remote", "get-url", "origin", allow_fail=True)
-    if fields.get("repo", "").strip().lower() == YAB_REPO and _remote_id(origin) == (YAB_HOST, YAB_REPO):
+    if _yab_sentinel(root) and _remote_id(origin) == (YAB_HOST, YAB_REPO):
         return True
     errors.append(
         ".yab-template present but origin is not %s/%s: delete it if this project was created from YAB "
@@ -529,9 +535,11 @@ def apply(root: Path) -> Dict[str, Any]:
         left = sorted(set(PLACEHOLDER_RE.findall(new)))
         if left:
             unresolved[rel] = left
-    # A template clone's CHANGELOG is YAB's history; once the sentinel is gone the project's own entries are kept.
+    # A template clone's CHANGELOG is YAB's history. Only a YAB sentinel and a committed CHANGELOG qualify, so a
+    # foreign sentinel or local edits never lose entries; once the sentinel is gone the project's own are kept.
     changelog_reset = False
-    if sentinel_deleted and CHANGELOG in tracked:
+    if (sentinel_deleted and _yab_sentinel(root) and CHANGELOG in tracked
+            and not _git(root, "status", "--porcelain", "--", CHANGELOG, allow_fail=True)):
         try:
             text = _read_regular(root / CHANGELOG)
         except (UnicodeDecodeError, OSError):
