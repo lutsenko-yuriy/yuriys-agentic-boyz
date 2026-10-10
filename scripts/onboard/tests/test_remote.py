@@ -21,11 +21,11 @@ class RemoteTests(unittest.TestCase):
         self.root = make_repo(self.tmp.name, origin=YAB_ORIGIN)
         self.gh_calls = []
 
-    def fake_gh(self, *args, fail=False):
+    def fake_gh(self, *args, fail=False, msg="gh repo create failed: Name already exists on this account"):
         def gh(*a):
             self.gh_calls.append(a)
             if fail:
-                raise onboard.OnboardError("gh repo create failed: name already exists")
+                raise onboard.OnboardError(msg)
             return NEW_URL if a[:2] == ("repo", "view") else ""
         return mock.patch.object(onboard, "_gh", side_effect=gh)
 
@@ -67,8 +67,14 @@ class RemoteTests(unittest.TestCase):
                               capture_output=True, text=True).stdout.strip()
         self.assertEqual(push, NEW_URL + ".git")
 
+    def test_existing_name_is_refused_without_a_url_hint(self):
+        with self.fake_gh(fail=True), self.assertRaises(onboard.Refused) as cm:
+            onboard.remote(self.root, new="proj")
+        self.assertNotIn("--url", str(cm.exception))
+        self.assertEqual(origin(self.root), YAB_ORIGIN)
+
     def test_create_failure_hints_at_url(self):
-        with self.fake_gh(fail=True), self.assertRaisesRegex(onboard.OnboardError, "re-run with --url"):
+        with self.fake_gh(fail=True, msg="gh repo create: timed out"), self.assertRaisesRegex(onboard.OnboardError, "re-run with --url"):
             onboard.remote(self.root, new="proj")
 
     def test_set_url_failure_after_create_points_at_url(self):

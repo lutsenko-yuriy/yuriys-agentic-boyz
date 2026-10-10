@@ -139,6 +139,7 @@ class BashAndToolsTest(unittest.TestCase):
         step_a = next(ln for ln in SKILL.read_text(encoding="utf-8").splitlines() if ln.startswith("Step A"))
         self.assertIn("gh_authenticated", step_a)
         self.assertIn("consent", step_a)
+        self.assertIn("only a URL the user typed", step_a)
 
     def test_never_uses_force(self):
         self.assertNotIn("--force", " ".join(bash_lines(text_of(skill_files()))))

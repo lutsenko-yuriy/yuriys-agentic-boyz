@@ -584,7 +584,10 @@ def remote(root: Path, new: Optional[str] = None, url: Optional[str] = None, non
             raise Refused("invalid repository name %r (use NAME or OWNER/NAME)" % new)
         try:
             _gh("repo", "create", new, "--public" if public else "--private")
-        except OnboardError as e:  # a timeout can hide a create that went through
+        except OnboardError as e:
+            if "already exists" in str(e).lower():  # someone else's repo: never suggest pointing origin at it
+                raise Refused("a repository named %s already exists on GitHub; pick another name" % new)
+            # A timeout can hide a create that went through.
             raise OnboardError("%s; if %s now exists on GitHub, re-run with --url" % (e, new))
         try:
             url = _gh("repo", "view", new, "--json", "url", "--jq", ".url") + ".git"
