@@ -544,6 +544,16 @@ class LicenceAndSentinelTests(unittest.TestCase):
             self.assertFalse(json.loads(out)["changelog_reset"])
             self.assertEqual((root / "docs/CHANGELOG.md").read_text(), self.CHANGELOG)
 
+    def test_rerun_after_a_partial_apply_does_not_warn(self):
+        # The first run emptied the CHANGELOG but failed before removing the sentinel.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": toml_text("github"), ".yab-template": YAB_SENTINEL,
+                                   "docs/CHANGELOG.md": self.CHANGELOG})
+            (root / "docs/CHANGELOG.md").write_text(self.EMPTY)
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            self.assertEqual(json.loads(out)["warnings"], [])
+
     def test_changelog_kept_without_sentinel_or_when_already_empty(self):
         for label, files, text in [
             ("no sentinel", {}, self.CHANGELOG),

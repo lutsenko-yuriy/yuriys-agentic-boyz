@@ -539,14 +539,15 @@ def apply(root: Path) -> Dict[str, Any]:
     # staged-only file still counts: the ZIP flow has no commit yet); once the sentinel is gone the project's own stay.
     changelog_reset = False
     if sentinel_deleted and _yab_sentinel(root) and CHANGELOG in tracked:
-        if _git(root, "diff", "--name-only", "--", CHANGELOG):
-            warnings.append("%s has unstaged edits, so it was not emptied: remove the template's entries by hand" % CHANGELOG)
-        else:
-            try:
-                text = _read_regular(root / CHANGELOG)
-            except (UnicodeDecodeError, OSError):
-                text = None
-            if text is not None and _empty_changelog(text) != text:
+        try:
+            text = _read_regular(root / CHANGELOG)
+        except (UnicodeDecodeError, OSError):
+            text = None
+        if text is not None and _empty_changelog(text) != text:
+            if _git(root, "diff", "--name-only", "--", CHANGELOG):
+                warnings.append("%s has unstaged edits, so it was not emptied: remove the template's entries once "
+                                "onboarding is done" % CHANGELOG)
+            else:
                 edits[CHANGELOG] = _empty_changelog(text)
                 changelog_reset = True
     for rel, text in edits.items():
