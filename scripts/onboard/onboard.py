@@ -6,7 +6,7 @@ Usage:
     python3 scripts/onboard/onboard.py check            # read-only JSON report; exit 1 if not clean
     python3 scripts/onboard/onboard.py apply            # fill placeholders from skill_router.toml, reconcile the rest
     python3 scripts/onboard/onboard.py mark [--force]   # write the per-clone onboarded marker
-    python3 scripts/onboard/onboard.py remote --create NAME [--public] | --url URL | --none
+    python3 scripts/onboard/onboard.py remote --new NAME [--public] | --url URL | --none
                                                          # repoint a template clone's origin (only from YAB or none)
 
 `remote` runs on any Python 3. `check`, `apply` and `mark` read skill_router.toml and need Python 3.11+ (tomllib); they fail loudly (exit 2) otherwise.
@@ -625,7 +625,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub.add_parser("mark").add_argument("--force", action="store_true")
     rp = sub.add_parser("remote")
     how = rp.add_mutually_exclusive_group(required=True)
-    how.add_argument("--create", metavar="NAME")
+    how.add_argument("--new", metavar="NAME", dest="create")
     how.add_argument("--url")
     how.add_argument("--none", action="store_true")
     rp.add_argument("--public", action="store_true")
@@ -647,7 +647,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0
         if args.cmd == "remote":
             if args.public and args.create is None:
-                raise OnboardError("--public only goes with --create")
+                raise OnboardError("--public only goes with --new")
             print(json.dumps(remote(root, args.create, args.url, args.none, args.public), indent=2))
             return 0
         return mark(root, args.force)

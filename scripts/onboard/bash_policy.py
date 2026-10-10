@@ -31,7 +31,7 @@ PYTHON_RE = re.compile(r"^python3(\.\d+)?$")
 ONBOARD_SCRIPTS = ("scripts/onboard/onboard.py", "./scripts/onboard/onboard.py")
 ONBOARD_SUBCOMMANDS = frozenset({"probe", "check", "apply", "mark"})
 # `remote` arguments as (flag, takes a value, may end with --public); onboard.py validates the value itself.
-ONBOARD_REMOTE_FORMS = {"--create": (True, True), "--url": (True, False), "--none": (False, False)}
+ONBOARD_REMOTE_FORMS = {"--new": (True, True), "--url": (True, False), "--none": (False, False)}
 
 INSPECTION_COMMANDS = (
     "ls pwd cat head tail wc file stat tree du diff cmp grep egrep rg cut tr jq basename dirname realpath which "
@@ -226,7 +226,7 @@ def _check_onboard(args: List[str]) -> Result:
     if len(args) != 2 or args[0] not in ONBOARD_SCRIPTS or args[1] not in ONBOARD_SUBCOMMANDS:
         return False, (
             "python: only `scripts/onboard/onboard.py <probe|check|apply|mark>` with no other arguments, or "
-            "`remote --create NAME [--public] | --url URL | --none`"
+            "`remote --new NAME [--public] | --url URL | --none`"
         )
     return OK
 

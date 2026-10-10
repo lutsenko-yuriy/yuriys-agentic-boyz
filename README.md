@@ -42,9 +42,11 @@ It probes your machine, infers the stack from the repo, asks only what it cannot
 
 ### Steps you do yourself
 
+If `origin` still points at this template, `/onboard` asks where the project's repository should live. It can create a new GitHub repo for you with `gh`, use a URL you give it, or drop `origin` for now.
+
 The gate blocks these for the agent, so `/onboard` prints a ready-to-paste command and waits for "done":
 
-- **Template origin:** if `origin` still points at this template, repoint it (`git remote set-url origin <your repo>`) or remove it.
+- **`gh` not logged in:** `gh auth login`, if you want `/onboard` to create the repo.
 - **Untracked files with placeholders:** `git add` them (staging is enough, no commit needed).
 - **No git repo yet:** `git init` and make a first commit.
 - **Maintaining a YAB fork:** `onboard.py mark --force`, from an interactive terminal.
