@@ -32,6 +32,11 @@ class ProjectIdTests(unittest.TestCase):
         cfg = config_from('[project]\nproject_id = ""\n\n[linear]\nproject_id = "old"\n')
         self.assertEqual(cfg.provider_settings["linear"], {"project_id": "old"})
 
+    def test_tools_table_is_neither_a_role_nor_a_provider(self):
+        cfg = config_from('[providers]\npm = "github"\n\n[tools]\nanalytics = "none"\nlogging = "Sentry"\n')
+        self.assertEqual(cfg.provider_roles, {"pm": "github"})
+        self.assertNotIn("tools", cfg.provider_settings)
+
     def test_no_project_id_anywhere(self):
         self.assertNotIn("linear", config_from('[providers]\npm = "linear"\n').provider_settings)
 
