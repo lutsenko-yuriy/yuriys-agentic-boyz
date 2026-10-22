@@ -33,9 +33,9 @@ Each WU gets its own branch (`feature/{{ISSUE_PREFIX}}-XX-WUN-<short>`, where N 
 
 ## CHANGELOG tags for intermediate WUs
 
-Use `[wip]` as the classification tag for all intermediate WU CHANGELOG entries — every WU except the final one. `[wip]` suppresses builds and distribution so testers do not receive partial builds mid-ticket. The final WU uses whichever tag actually reflects what the ticket produced: a user-facing/app-changing tag if it's user-facing (this is when CI builds and distributes, and "What's New" aggregates all user-facing content back to the last published tag), or an internal-only tag if the ticket is pure process/CI/tooling work end-to-end with nothing user-facing to ship.
+Use `[wip]` as the classification tag for all intermediate WU CHANGELOG lines — every WU except the final one. Merging never builds or releases anything; releases are cut separately by `/prepare-release`, which selects only `[user]`/`[app]` lines. A `[wip]` line is never selected, so a partial ticket never drives a version bump or release notes; it only moves along with whatever release is cut. The final WU uses whichever tag actually reflects what the ticket produced: `[user]`/`[app]` if it changes the product, with its semver mark and, if any, its flags, so `/prepare-release` can select it and draft release notes from it; or an internal-only tag (`[meta]`, `[ci]`, `[test]`) if the ticket is pure process/CI/tooling work end-to-end.
 
-An intermediate WU's `[wip]` entry goes under a `## [Unreleased]` heading at the top of `docs/CHANGELOG.md` — create that heading if it doesn't exist yet rather than appending into the most recent numbered `## [X.Y.Z]` entry (which is already-released). The final WU's `ship` pass converts `## [Unreleased]` into the real `## [X.Y.Z] — YYYY-MM-DD` entry.
+Every WU's line goes under the `## [Unreleased]` heading at the top of `docs/CHANGELOG.md`, never into a numbered `## [X.Y.Z]` entry (which is already released); `/prepare-release` later moves lines under a numbered heading when a release is cut.
 
 ## WU cycle (WU1 onwards)
 

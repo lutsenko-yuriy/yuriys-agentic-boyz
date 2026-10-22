@@ -96,9 +96,7 @@ behaviour beyond a literal value, it is not trivial — use the full workflow in
    - `docs/PRODUCT_SPEC.md` — functionality added, removed, or changed
    - `docs/ARCHITECTURE.md` — code structure or dependencies changed
    - `docs/VERSIONING.md` — versioning process impacted
-7. **Keep the version file in sync with `docs/CHANGELOG.md`.** Before committing, check that the version name in sync with the latest numbered entry in `CHANGELOG.md`. If a new changelog entry was added in this PR/MR and it carries a user-facing/app-changing tag, update the version file accordingly. Do not touch the build number if CI manages it automatically.
-
-   **Never commit a CHANGELOG entry with no classification tag if your project's `docs/VERSIONING.md` requires one.**
+7. **Leave `docs/CHANGELOG.md` and the version file alone.** `/ship` (step 13) adds this PR/MR's line under `## [Unreleased]`, with its tag and, for `[user]`/`[app]` lines, a semver mark; `/prepare-release` bumps the version when a release is cut (`docs/VERSIONING.md`, Release flow). Do not touch the build number if CI manages it automatically.
 8. Commit all changes with a descriptive message.
 9. Push to the remote and open a PR/MR — all in parallel, except the checklist gate below which comes first:
 
@@ -129,7 +127,7 @@ behaviour beyond a literal value, it is not trivial — use the full workflow in
     ```
     Invoke the ship skill for PR/MR #<number>
     ```
-    The skill moves the ticket to its post-merge state, adds a CHANGELOG entry, regenerates BACKLOG.md, bumps the version, commits onto the feature branch, pushes, and merges.
+    The skill moves the ticket to its post-merge state, adds a marked CHANGELOG line under `## [Unreleased]`, regenerates BACKLOG.md, commits onto the feature branch, pushes, and merges. It never bumps the version.
 14. Clear the context now that the ticket is fully shipped, before starting a new ticket.
 15. A new ticket may be picked up while the previous one is still being verified.
 

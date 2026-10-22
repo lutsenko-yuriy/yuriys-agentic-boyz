@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.changelog import changelog
 from scripts.onboard import bash_policy, gate, onboard
 from scripts.onboard.tests import template_only
 
@@ -435,7 +436,9 @@ class TemplateFlowTest(unittest.TestCase):
             root = make_clone(tmp, "https://github.com/me/proj.git", sentinel=True)
             write_config(root)
             self.assertTrue(onboard.apply(root)["changelog_reset"])
-            self.assertNotIn("## [Unreleased]", (root / "docs/CHANGELOG.md").read_text())
+            text = (root / "docs/CHANGELOG.md").read_text()
+            self.assertNotIn("## [Unreleased]", onboard._strip_comments(text))  # the footer comment shows the format
+            self.assertIn(changelog.MARKER, text.splitlines())  # a new project's CHANGELOG is linted from the start
             errors = onboard.check(root)["errors"]
             self.assertTrue(any(e.startswith("README.md is still the YAB template README") for e in errors))
 
@@ -495,6 +498,35 @@ class RegistrationTest(unittest.TestCase):
         calibrate_row = next(ln for ln in rows if "skills/configure/calibrate/SKILL.md" in ln)
         self.assertIn("re-map", calibrate_row.lower())
         self.assertIn("/onboard", calibrate_row)
+
+
+class ShipChangelogTest(unittest.TestCase):
+    SHIP = ROOT / "skills" / "manage" / "ship"
+
+    def ship_text(self):
+        return text_of([self.SHIP / "SKILL.md"] + sorted((self.SHIP / "resources").glob("*.md")))
+
+    def test_named_changelog_subcommands_exist(self):
+        named = set(re.findall(r"changelog\.py (\w+)", self.ship_text()))
+        self.assertIn("lint", named)
+        self.assertLessEqual(named, set(changelog.SUBCOMMANDS))
+
+    def test_ship_writes_unreleased_and_never_bumps(self):
+        text = (self.SHIP / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("## [Unreleased]", text)
+        self.assertNotRegex(text, r"(?im)^#+ .*bump the version")
+        self.assertNotRegex(text, r"(?m)^## \[X\.Y\.Z\]")  # no numbered heading template
+
+    def test_ship_never_writes_inside_the_footer_comment(self):
+        step = (self.SHIP / "SKILL.md").read_text(encoding="utf-8").split("### 2.")[1].split("### 3.")[0]
+        self.assertIn("outside any HTML comment", step)
+
+    def test_tag_table_lists_every_tag(self):
+        table = (self.SHIP / "resources" / "changelog-tags.md").read_text(encoding="utf-8")
+        for tag in changelog.TAGS:
+            self.assertIn("`[%s]`" % tag, table)
+        for mark in changelog.MARKS:
+            self.assertIn(mark, table)
 
 
 if __name__ == "__main__":

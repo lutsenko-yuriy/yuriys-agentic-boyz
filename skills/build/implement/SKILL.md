@@ -180,7 +180,7 @@ Return: what was built, PR/MR number and URL, test results, any deviations from 
 
 - **TDD is non-negotiable.** Tests must be red before implementation starts.
 - **No plan = no code.** Stop and escalate if the plan comment is missing.
-- **Do not touch version files** — bumps require explicit user approval per `docs/VERSIONING.md`.
+- **Do not touch version files** — only `/prepare-release` changes the version, confirmed by the user (`docs/VERSIONING.md`).
 - **Do not merge** — that is the `ship` skill's responsibility.
 - **Do not update `docs/ARCHITECTURE.md` or `docs/PRODUCT_SPEC.md` directly** — delegate as described in step 8.
 - Fix all test and lint failures before opening the PR/MR. Never leave the build red.
