@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-"""Generic CHANGELOG tool: lint the `[Unreleased]` line grammar and propose the next version.
+"""Generic CHANGELOG tool: lint the `[Unreleased]` line grammar, propose the next version and cut a release.
 
 Usage:
     python3 scripts/changelog/changelog.py lint <path>                         # grammar findings
     python3 scripts/changelog/changelog.py unreleased <path>                   # app-changing [Unreleased] lines
     python3 scripts/changelog/changelog.py propose <path> --current X.Y.Z      # next version from the highest mark
+    python3 scripts/changelog/changelog.py latest <path>                       # latest released X.Y.Z, or null
+    python3 scripts/changelog/changelog.py cut <path> X.Y.Z [--keep N ...] [--notes-file F] [--date YYYY-MM-DD]
+        # release commit content: every [Unreleased] line except the kept app lines (file line numbers, as
+        # `unreleased` reports them) moves under a new `## [X.Y.Z] — date` heading with `### Release notes`
+        # (from F, omitted when empty) and `### Changes`; an emptied `## [Unreleased]` is removed
+    python3 scripts/changelog/changelog.py notes <path> X.Y.Z                  # that release's notes, plain text
 
 Line grammar (skills/manage/ship/resources/changelog-tags.md):
     - <ID>: <summary> (PR #N) [tag]... <MAJOR|MINOR|PATCH> flags: <name>, <name>   (mark and flags as the rules require)
@@ -13,12 +19,13 @@ Only a CHANGELOG with the format marker line `<!-- changelog-format: yab-1 -->` 
 marker anywhere is a finding); without it `lint` prints a notice and exits 0, and `unreleased`/`propose` still parse
 but add the notice to their output; an unknown format is refused by all three.
 Only `## [Unreleased]` lines are linted; numbered `## [X.Y.Z]` sections are checked for their heading format only.
-Prints JSON on stdout. Exit codes: 0 ok, 1 findings or refusal.
+Prints JSON on stdout (`notes` prints its plain text on success). Exit codes: 0 ok, 1 findings or refusal.
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import re
 import sys
@@ -29,7 +36,7 @@ CLASSIFICATION_TAGS = ("user", "app", "test", "meta", "ci", "wip")
 TAGS = CLASSIFICATION_TAGS + ("non-user",)
 APP_TAGS = ("user", "app")
 MARKS = ("PATCH", "MINOR", "MAJOR")  # ascending precedence
-SUBCOMMANDS = ("lint", "unreleased", "propose")
+SUBCOMMANDS = ("lint", "unreleased", "propose", "latest", "cut", "notes")
 
 FORMAT = "yab-1"
 MARKER = "<!-- changelog-format: %s -->" % FORMAT
@@ -43,6 +50,11 @@ UNRELEASED_LIKE_RE = re.compile(r"^##\s+\[?\s*unreleased\b", re.IGNORECASE)
 NUMBERED_RE = re.compile(r"^## \[\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\]"
                          r"(?: [-–—] \d{4}-(?:\d{2}|\?\?)-(?:\d{2}|\?\?)(?: \(.*\))?)?(?: \[YANKED\])?$")
 VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# A numbered heading's version: X.Y or X.Y.Z, then the pre-release/build suffix (if any) and the rest.
+HEADING_VERSION_RE = re.compile(r"^## \[(\d+)\.(\d+)(?:\.(\d+))?([-+][^\]]*)?\]")
+RELEASE_NOTES = "### Release notes"
+CHANGES = "### Changes"
 ENTRY_RE = re.compile(r"^- (?P<id>[^\s:][^:]*): (?P<rest>.+)$")
 TAIL_RE = re.compile(r"^(?P<summary>.*?)(?P<tags>(?: \[[^\[\]\s]+\])+)(?: (?P<mark>[A-Za-z]+))?(?: flags:(?P<flags>.*))?$")
 FLAG_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -196,6 +208,97 @@ def propose(text: str, current: str) -> str:
     return ["%d.%d.%d" % (major, minor, patch + 1), "%d.%d.0" % (major, minor + 1), "%d.0.0" % (major + 1)][top]
 
 
+def _versions(text: str) -> List[Tuple[str, Optional[Tuple[int, int, int]]]]:
+    """(version as written, (X, Y, Z) or None for a pre-release/build) for each numbered heading."""
+    out = []
+    for line in _blank_comments(text):
+        m = HEADING_VERSION_RE.match(line.rstrip())
+        if m:
+            core = (int(m.group(1)), int(m.group(2)), int(m.group(3) or 0))
+            written = line[len("## ["):line.index("]")]
+            out.append((written, None if m.group(4) else core))
+    return out
+
+
+def latest(text: str) -> Optional[str]:
+    """The highest released X.Y.Z (X.Y counts as X.Y.0; pre-releases are skipped), or None."""
+    cores = [core for _, core in _versions(text) if core]
+    return "%d.%d.%d" % max(cores) if cores else None
+
+
+def _section_end(lines: List[str], start: int) -> int:
+    """Index of the next `## ` heading or `---` rule after the heading at start (lines are comment-blanked)."""
+    for i in range(start + 1, len(lines)):
+        if lines[i].startswith("## ") or lines[i].strip() == "---":
+            return i
+    return len(lines)
+
+
+def cut(text: str, version: str, keep: List[int], notes_text: str, date: str) -> str:
+    """The CHANGELOG after releasing version; keep holds file line numbers of app lines that stay in [Unreleased]."""
+    m = VERSION_RE.match(version)
+    if not m:
+        raise ChangelogError("version %r is not X.Y.Z" % version)
+    if not DATE_RE.match(date):
+        raise ChangelogError("date %r is not YYYY-MM-DD" % date)
+    if any(written == version for written, _ in _versions(text)):
+        raise ChangelogError("## [%s] already exists" % version)
+    previous = latest(text)
+    if previous and tuple(int(g) for g in m.groups()) <= tuple(int(g) for g in previous.split(".")):
+        raise ChangelogError("version %s must be greater than the latest release %s" % (version, previous))
+    try:
+        app = unreleased(text)["app"]
+    except ChangelogError as e:
+        if e.findings:
+            raise ChangelogError("CHANGELOG has lint findings; fix them first", e.findings)
+        raise
+    app_lines = {e["line"]: e for e in app}
+    stray = sorted(set(keep) - set(app_lines))
+    if stray:
+        raise ChangelogError("line(s) %s not an app-changing [Unreleased] line" % ", ".join(map(str, stray)))
+    selected = [e for n, e in app_lines.items() if n not in keep]
+    if not selected:
+        raise ChangelogError("no [user]/[app] lines selected: nothing to release")
+    missing = [e["line"] for e in selected if e["mark"] is None]
+    if missing:
+        raise ChangelogError("missing semver mark on selected line(s) %s" % ", ".join(map(str, missing)))
+
+    raw = text.splitlines()
+    blanked = _blank_comments(text)
+    start = blanked.index(UNRELEASED)
+    end = _section_end(blanked, start)
+    entries = {n - 1 for n, _, _ in _scan(text)[1]}
+    moved = [raw[i] for i in range(start + 1, end) if i in entries and i + 1 not in keep]
+    body = [raw[i] for i in range(start + 1, end) if not (i in entries and i + 1 not in keep)]
+    while body and not body[-1].strip():
+        body.pop()
+    head = [raw[start]] + body + [""] if keep else []
+    notes_lines = notes_text.strip("\n").splitlines() if notes_text.strip() else []
+    release = ["## [%s] — %s" % (version, date), ""]
+    if notes_lines:
+        release += [RELEASE_NOTES] + notes_lines + [""]
+    release += [CHANGES] + moved + [""]
+    out = raw[:start] + head + release + raw[end:]
+    return "\n".join(out) + "\n"
+
+
+def notes(text: str, version: str) -> str:
+    """The `### Release notes` body of version's section ("" when it has none), for release jobs."""
+    raw, blanked = text.splitlines(), _blank_comments(text)
+    starts = [i for i, ln in enumerate(blanked) if ln.startswith("## [%s]" % version)]
+    if not starts:
+        raise ChangelogError("no ## [%s] heading" % version)
+    end = _section_end(blanked, starts[0])
+    out: List[str] = []
+    inside = False
+    for i in range(starts[0] + 1, end):
+        if blanked[i].startswith("### "):
+            inside = blanked[i].rstrip() == RELEASE_NOTES
+        elif inside and blanked[i].strip():
+            out.append(raw[i])
+    return "\n".join(out)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -204,6 +307,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         p.add_argument("path")
         if name == "propose":
             p.add_argument("--current", required=True)
+        if name in ("cut", "notes"):
+            p.add_argument("version")
+        if name == "cut":
+            p.add_argument("--keep", type=int, nargs="*", default=[])
+            p.add_argument("--notes-file")
+            p.add_argument("--date", default=datetime.date.today().isoformat())
     args = parser.parse_args(argv)
     try:
         text = Path(args.path).read_text(encoding="utf-8")
@@ -221,8 +330,24 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         if args.cmd == "unreleased":
             result = unreleased(text)
-        else:
+        elif args.cmd == "propose":
             result = {"version": propose(text, args.current)}
+        elif args.cmd == "latest":
+            result = {"version": latest(text)}
+        elif args.cmd == "notes":
+            body = notes(text, args.version)
+            if body:
+                print(body)
+            return 0
+        else:
+            try:
+                notes_text = Path(args.notes_file).read_text(encoding="utf-8") if args.notes_file else ""
+            except (OSError, UnicodeDecodeError) as e:
+                raise ChangelogError(str(e))
+            new = cut(text, args.version, args.keep, notes_text, args.date)
+            Path(args.path).write_text(new, encoding="utf-8")
+            result = {"version": args.version, "moved": len(_scan(text)[1]) - len(set(args.keep)),
+                      "kept": len(set(args.keep))}
     except ChangelogError as e:
         error = {"error": str(e), "findings": e.findings} if e.findings else {"error": str(e)}
         print(json.dumps(dict(error, **notice), indent=2, ensure_ascii=False))
