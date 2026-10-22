@@ -217,6 +217,12 @@ class ConfigAgreementTest(unittest.TestCase):
         keys = (block("tool-keys", SKILL.read_text(encoding="utf-8")) or "").split()
         self.assertEqual(onboard.TOOL_KEYS, keys)
 
+    def test_tools_rule_covers_missing_table_and_empty_value(self):
+        config = (ROOT / "skills/shared/project-config.md").read_text(encoding="utf-8")
+        rule = config.split("## Tools", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("missing `[tools]` table", rule)
+        self.assertIn("empty value", rule)
+
     def test_tool_consumers_name_their_key(self):
         config = (ROOT / "skills/shared/project-config.md").read_text(encoding="utf-8")
         for key in onboard.TOOL_KEYS:
