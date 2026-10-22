@@ -31,10 +31,10 @@ Read `docs/ANALYTICS_EVENTS.md` in full to understand what is already tracked an
 
 ### 2a. Check the analytics tool
 
-Read `[tools].analytics` in `skill_router.toml` (see `skills/shared/project-config.md`).
+Read `[tools].analytics` in `skill_router.toml`; how to read it is defined once in `skills/shared/project-config.md` (Tools).
 
 - **`none`:** run every step anyway. Open the plan with the template's "Not sent yet" status line; the approved entries are appended to the catalogue as planned events, and step 9 tells the orchestrator that `implement` has no instrumentation call to add.
-- **A tool name, or no `[tools]` table:** continue as below.
+- **Otherwise:** continue as below.
 
 ### 3. Read the product context
 

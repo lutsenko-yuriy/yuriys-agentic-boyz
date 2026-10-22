@@ -222,6 +222,7 @@ class ConfigAgreementTest(unittest.TestCase):
         rule = config.split("## Tools", 1)[1].split("\n## ", 1)[0]
         self.assertIn("missing `[tools]` table", rule)
         self.assertIn("empty value", rule)
+        self.assertRegex(rule, r"(?i)consumers act only on `none`")
 
     def test_tool_consumers_name_their_key(self):
         config = (ROOT / "skills/shared/project-config.md").read_text(encoding="utf-8")
@@ -233,7 +234,11 @@ class ConfigAgreementTest(unittest.TestCase):
             ("skills/manage/checkup/resources/light-dimensions.md", "feature_flags"),
         ]:
             with self.subTest(rel):
-                self.assertIn("[tools].%s" % key, (ROOT / rel).read_text(encoding="utf-8"))
+                text = (ROOT / rel).read_text(encoding="utf-8")
+                self.assertIn("[tools].%s" % key, text)
+                # The missing-table / empty-value rule lives once in project-config.md; consumers point to it.
+                self.assertIn("skills/shared/project-config.md", text)
+                self.assertNotRegex(text, r"(?i)(missing|no) `\[tools\]` table|empty value")
 
     @template_only
     def test_analytics_catalogue_names_its_key(self):

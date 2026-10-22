@@ -18,7 +18,7 @@ What the project uses for each role, recorded by `/onboard` in `skill_router.tom
 | `[tools].logging` | Logging and crash reporting |
 | `[tools].feature_flags` | Feature flags: kill-switches and remote config; also the experiment tool |
 
-A missing `[tools]` table (onboarded before these were recorded) or an empty value (e.g. `""` from a merged template `skill_router.toml`) means the same: assume a tool exists (the previous behaviour).
+A missing `[tools]` table (onboarded before these were recorded) or an empty value (e.g. `""` from a merged template `skill_router.toml`) means the same: assume a tool exists (the previous behaviour). Consumers act only on `none`; any other state proceeds as if the tool exists.
 
 ## Project management
 
