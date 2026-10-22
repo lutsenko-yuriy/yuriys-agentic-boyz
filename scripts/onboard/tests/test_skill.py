@@ -223,12 +223,16 @@ class ConfigAgreementTest(unittest.TestCase):
             self.assertIn("`[tools].%s`" % key, config)
         for rel, key in [
             ("skills/design/analyze/SKILL.md", "analytics"),
-            ("docs/ANALYTICS_EVENTS.md", "analytics"),
             ("docs/workflows/FEATURE.md", "feature_flags"),
             ("skills/manage/checkup/resources/light-dimensions.md", "feature_flags"),
         ]:
             with self.subTest(rel):
                 self.assertIn("[tools].%s" % key, (ROOT / rel).read_text(encoding="utf-8"))
+
+    @template_only
+    def test_analytics_catalogue_names_its_key(self):
+        # Adopters own docs/ANALYTICS_EVENTS.md (their event catalogue), so only the shipped template is checked.
+        self.assertIn("[tools].analytics", (ROOT / "docs/ANALYTICS_EVENTS.md").read_text(encoding="utf-8"))
 
     def test_every_key_needs_a_concrete_value(self):
         text = SKILL.read_text(encoding="utf-8")
