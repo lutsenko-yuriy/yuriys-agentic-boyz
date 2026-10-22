@@ -558,5 +558,71 @@ class ShipChangelogTest(unittest.TestCase):
             self.assertIn(mark, table)
 
 
+    def test_ship_merge_table_keeps_merge_commits(self):
+        text = (self.SHIP / "SKILL.md").read_text(encoding="utf-8")
+        self.assertNotIn("--squash", text)
+        self.assertIn("gh pr merge {number} --merge --delete-branch", text)
+
+
+class PrepareReleaseTest(unittest.TestCase):
+    DIR = ROOT / "skills" / "manage" / "prepare-release"
+    SKILL = DIR / "SKILL.md"
+
+    def text(self):
+        return text_of([self.SKILL] + sorted((self.DIR / "resources").glob("*.md")))
+
+    def test_frontmatter(self):
+        head = self.SKILL.read_text(encoding="utf-8").split("---")[1]
+        for line in ["name: prepare-release", "effort: FOCUSED", "reasoning: TACTICAL", "needs_session_tools: true"]:
+            self.assertIn(line, head)
+
+    def test_named_changelog_subcommands_exist(self):
+        named = set(re.findall(r"changelog\.py (\w+)", self.text()))
+        self.assertLessEqual({"lint", "unreleased", "propose", "latest", "cut"}, named)
+        self.assertLessEqual(named, set(changelog.SUBCOMMANDS))
+
+    def test_names_its_config_keys_and_points_to_project_config(self):
+        text = self.SKILL.read_text(encoding="utf-8")
+        for key in onboard.RELEASE_KEYS:
+            self.assertIn("[release].%s" % key, text)
+        self.assertIn("[tools].feature_flags", text)
+        self.assertIn("skills/shared/project-config.md", text)
+        # The missing-table / empty-value rule lives once in project-config.md.
+        self.assertNotRegex(text, r"(?i)(missing|no) `\[release\]` table|empty value")
+
+    def test_protected_branch_opens_a_release_pr_and_never_merges(self):
+        text = self.SKILL.read_text(encoding="utf-8")
+        self.assertIn("release/vX.Y.Z", text)
+        self.assertRegex(text, r"(?i)never merge")
+        self.assertNotRegex(text, r"(gh pr merge|glab mr merge)")
+
+    def test_waits_for_go_and_uses_the_notes_checklist(self):
+        text = self.SKILL.read_text(encoding="utf-8")
+        self.assertIn('"go"', text)
+        self.assertIn("skills/manage/prepare-release/resources/notes-checklist.md", text)
+        self.assertTrue((self.DIR / "resources" / "notes-checklist.md").is_file())
+
+    def test_stub_and_registrations(self):
+        stub = (ROOT / ".claude" / "commands" / "prepare-release.md").read_text(encoding="utf-8")
+        self.assertIn("skills/manage/prepare-release/SKILL.md", stub)
+        self.assertIn("$ARGUMENTS", stub)
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("| skills/manage/prepare-release/SKILL.md |", agents)
+        self.assertIn("/prepare-release", agents.split("## Versioning", 1)[1].split("\n## ", 1)[0])
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("prepare-release", readme.split("## Skill workflow", 1)[1].split("\n## ", 1)[0])
+        self.assertRegex(readme, r"`manage` \([^)]*prepare-release")
+        self.assertRegex((ROOT / "docs" / "MODEL_TIERS.md").read_text(encoding="utf-8"),
+                         r"\| `prepare-release` \| FOCUSED \| TACTICAL \|")
+        tier_map = (ROOT / "skills" / "configure" / "calibrate" / "resources" / "skill-tier-map.md").read_text(encoding="utf-8")
+        row = next(ln for ln in tier_map.splitlines() if ln.startswith("| FOCUSED | TACTICAL |"))
+        self.assertIn("`prepare-release`", row)
+
+    def test_feature_toggle_gate_names_the_changelog_flag(self):
+        gate = (ROOT / "docs" / "workflows" / "FEATURE.md").read_text(encoding="utf-8").split("4. **Feature toggle.**")[1]
+        gate = gate.split("\n   5. ")[0]
+        self.assertIn("flags:", gate)
+        self.assertIn("version gate", gate)
+
 if __name__ == "__main__":
     unittest.main()

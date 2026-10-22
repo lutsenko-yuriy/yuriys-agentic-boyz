@@ -89,8 +89,8 @@ Then merge the PR/MR on your Git host:
 
 | Host | Command |
 |---|---|
-| GitHub | `gh pr merge {number} --squash --delete-branch` |
-| GitLab | `glab mr merge {iid} --squash --remove-source-branch` |
+| GitHub | `gh pr merge {number} --merge --delete-branch` |
+| GitLab | `glab mr merge {iid} --remove-source-branch` |
 | Bitbucket | merge via Bitbucket REST API or UI |
 
 ### 6. Report back

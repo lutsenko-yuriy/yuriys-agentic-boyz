@@ -15,7 +15,10 @@ User-facing feature
         └─▶ plan — produces implementation plan, waits for approval
                └─▶ implement — TDD, opens PR/MR
                       └─▶ review + audit — parallel review (architectural + runtime)
-                             └─▶ ship — closes issues, regenerates docs, merges PR/MR
+                             └─▶ ship — closes issues, adds a CHANGELOG line, regenerates docs, merges PR/MR
+
+Release (whenever you choose)
+  └─▶ prepare-release — selects merged changes, drafts release notes, bumps the version, tags, publishes
 ```
 
 ## Quick start
@@ -60,7 +63,7 @@ After onboarding, commit and push the result before collaborators clone; otherwi
 
 ## What's included
 
-- `skills/`: `configure` (onboard, calibrate, style, skill-creator, migrate-provider), `design` (brief, analyze, plan, research, experiment), `build` (implement), `verify` (review, audit, draft-scenarios), `manage` (summarize, ship, debrief, note, checkup)
+- `skills/`: `configure` (onboard, calibrate, style, skill-creator, migrate-provider), `design` (brief, analyze, plan, research, experiment), `build` (implement), `verify` (review, audit, draft-scenarios), `manage` (summarize, ship, prepare-release, debrief, note, checkup)
 - `.claude/commands/`: one slash-command stub per skill
 - `styles/`: DETAILED, CONCISE, SCHEMATIC communication styles
 - `scripts/onboard/`: onboarding helper, gate hooks and tests

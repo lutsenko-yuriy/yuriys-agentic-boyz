@@ -38,6 +38,7 @@ Full product specifications: docs/PRODUCT_SPEC.md
 | skills/configure/style/SKILL.md | Switch communication style: DETAILED, CONCISE, or SCHEMATIC |
 | skills/manage/summarize/SKILL.md | Session-start: fetch and display the backlog |
 | skills/manage/ship/SKILL.md | Post-merge housekeeping: close issues, add a marked CHANGELOG line under [Unreleased], update docs, merge |
+| skills/manage/prepare-release/SKILL.md | Cut a release: select [Unreleased] lines, draft release notes, propose the version from the semver marks, then release commit, `vX.Y.Z` tag, release job and flags after the user's "go" |
 | skills/manage/debrief/SKILL.md | Post-ticket retrospective: structured dialog → workflow improvements + knowledge base entry |
 | skills/manage/note/SKILL.md | Capture a quick observation mid-session into `docs/knowledge/notes/` |
 | skills/manage/checkup/SKILL.md | Two-tier periodic code-quality checkup (light monthly / heavy quarterly) — walks 9 non-mechanical dimensions, fixes inline or defers findings to a ledger with deadlines |
@@ -71,7 +72,7 @@ See `docs/CODE_STYLE.md` for the full rules.
 
 ## Versioning
 
-Never bump the version in a PR/MR: `/ship` adds a marked line under `## [Unreleased]` in `CHANGELOG.md`, and the version is bumped only when a release is cut.
+Never bump the version in a PR/MR: `/ship` adds a marked line under `## [Unreleased]` in `CHANGELOG.md`, and only `/prepare-release` bumps the version, when a release is cut.
 CI handles build numbers automatically — do not touch.
 Details: @docs/VERSIONING.md
 
