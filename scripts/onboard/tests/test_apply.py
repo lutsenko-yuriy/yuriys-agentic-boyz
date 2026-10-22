@@ -148,14 +148,19 @@ class SubstitutionTests(unittest.TestCase):
                 self.assertIn("tools.", err)
                 self.assertEqual(snapshot(root), before)
 
-    def test_legacy_experiment_tool_key_is_not_warned_or_used(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = self.repo(tmp, toml_text("github", name="N", experiment_tool="Firebase"),
-                             {"a.md": ph("EXPERIMENT_TOOL")})
-            code, out, err = run_apply(root, "--root", str(root))
-            self.assertEqual(code, 0, err)
-            self.assertEqual(json.loads(out)["warnings"], [])
-            self.assertEqual((root / "a.md").read_text(), ph("EXPERIMENT_TOOL"))
+    def test_legacy_experiment_tool_key_is_a_fallback_without_tools_table(self):
+        for label, extra, expected in [
+            ("no table", "", "Firebase"),
+            ("table wins", '[tools]\nfeature_flags = "Statsig"\n', "Statsig"),
+            ("empty table value", '[tools]\nfeature_flags = ""\n', ph("EXPERIMENT_TOOL")),
+        ]:
+            with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
+                root = self.repo(tmp, toml_text("github", extra=extra, name="N", experiment_tool=" Firebase "),
+                                 {"a.md": ph("EXPERIMENT_TOOL")})
+                code, out, err = run_apply(root, "--root", str(root))
+                self.assertEqual(code, 0, err)
+                self.assertEqual(json.loads(out)["warnings"], [])
+                self.assertEqual((root / "a.md").read_text(), expected)
 
     def test_unknown_pm_is_an_error_and_writes_nothing(self):
         for pm in ["trello", "jira", "github_issues", "files"]:

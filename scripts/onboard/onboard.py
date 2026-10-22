@@ -76,9 +76,9 @@ LIST_FIELDS = {"available_models", "in_qa_paths"}
 # Keys must be skill_router provider names (scripts/skill_router/providers): [providers].pm routes to that provider.
 PM_TOOLS = {"linear": "Linear", "github": "GitHub Issues"}
 PROJECT_KEYS = set(PLACEHOLDER_FIELDS.values()) | {"keep_licence"}
-# PM_TOOL from [providers].pm, EXPERIMENT_TOOL from [tools].feature_flags.
+# PM_TOOL from [providers].pm, EXPERIMENT_TOOL from [tools].feature_flags (legacy [project].experiment_tool without [tools]).
 DERIVED_PLACEHOLDERS = {"PM_TOOL", "EXPERIMENT_TOOL"}
-# Retired [project] keys: accepted without a warning, never substituted.
+# Retired [project] keys: accepted without a warning; only read as the fallback above.
 LEGACY_PROJECT_KEYS = {"experiment_tool"}
 # [tools]: what the project uses for each role, a tool name or "none"; read by skills at runtime.
 TOOL_KEYS = ["analytics", "logging", "feature_flags"]
@@ -478,7 +478,10 @@ def check(root: Path) -> Dict[str, Any]:
 def _values(project: Dict[str, Any], pm: str, tools: Optional[Dict[str, str]]) -> Dict[str, str]:
     """Non-empty placeholder values only: an empty one must stay a placeholder so `check` still reports it."""
     values: Dict[str, str] = {}
-    for name, field in PLACEHOLDER_FIELDS.items():
+    fields = dict(PLACEHOLDER_FIELDS)
+    if tools is None:
+        fields["EXPERIMENT_TOOL"] = "experiment_tool"
+    for name, field in fields.items():
         raw = project.get(field, "")
         if field in LIST_FIELDS and isinstance(raw, list) and all(isinstance(i, str) for i in raw):
             raw = ", ".join(i.strip() for i in raw if i.strip())
