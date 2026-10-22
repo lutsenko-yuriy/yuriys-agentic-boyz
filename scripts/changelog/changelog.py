@@ -36,7 +36,9 @@ MARKER_RE = re.compile(r"^<!-- changelog-format: (\S+) -->[ \t]*$", re.MULTILINE
 NOTICE = "no %s line: not linted; add it above the first '---' to opt in (docs/VERSIONING.md)" % MARKER
 
 UNRELEASED = "## [Unreleased]"
-NUMBERED_RE = re.compile(r"^## \[(\d+\.\d+\.\d+)\] — \d{4}-\d{2}-\d{2}(?: \(.*\))?$")
+# Grandfathered: X.Y or X.Y.Z with optional pre-release/build, `-`/`–`/`—`, `??` date parts, or no date.
+NUMBERED_RE = re.compile(r"^## \[\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\]"
+                         r"(?: [-–—] \d{4}-(?:\d{2}|\?\?)-(?:\d{2}|\?\?)(?: \(.*\))?)?$")
 VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 ENTRY_RE = re.compile(r"^- (?P<id>[^\s:][^:]*): (?P<rest>.+)$")
 TAIL_RE = re.compile(r"^(?P<summary>.*?)(?P<tags>(?: \[[^\[\]\s]+\])+)(?: (?P<mark>[A-Za-z]+))?(?: flags:(?P<flags>.*))?$")

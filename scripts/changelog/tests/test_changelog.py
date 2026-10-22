@@ -77,8 +77,15 @@ class SectionTest(unittest.TestCase):
         released = "\n## [1.2.0] — 2026-01-02\n\n- [user] old style line\nfree text\n"
         self.assertEqual([], errors(doc("- #1: x [meta]", released=released)))
 
+    def test_grandfathered_numbered_headings(self):
+        for heading in ["## [1.2.0] — 2026-01-02", "## [1.2.0] - 2026-01-02", "## [1.2.0] – 2026-01-02", "## [1.2.0]",
+                        "## [1.2] — 2026-01-02", "## [1.0]", "## [1.0.0-beta.1] — 2026-01-02",
+                        "## [1.0.0-rc.1+build.5] - 2026-01-02", "## [0.1.0] — 2026-03-??", "## [0.1.0] — 2026-??-??"]:
+            self.assertEqual([], errors(doc(released="\n%s\n- x\n" % heading)), heading)
+
     def test_numbered_heading_format(self):
-        for heading in ["## [1.2] — 2026-01-02", "## [1.2.0] - 2026-01-02", "## [1.2.0]", "## [v1.2.0] — 2026-01-02"]:
+        for heading in ["## [v1.2.0] — 2026-01-02", "## [1] — 2026-01-02", "## [1.2.0] 2026-01-02",
+                        "## [1.2.0] — 26-01-02", "## [1.2.0] — 2026-1-2", "## [1.2.0] — soon", "## [next]"]:
             found = errors(doc(released="\n%s\n- x\n" % heading))
             self.assertEqual(1, len(found), heading)
             self.assertIn("heading", found[0], heading)
