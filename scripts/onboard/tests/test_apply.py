@@ -26,7 +26,6 @@ FIELD_CASES = {
     "PM_PROJECT_URL": ("pm_project_url", "https://linear.app/x"),
     "TEAM_ID": ("team_id", "team-1"),
     "PROJECT_ID": ("project_id", "proj-1"),
-    "EXPERIMENT_TOOL": ("experiment_tool", "Firebase"),
     "AVAILABLE_MODELS": ("available_models", "opus, sonnet"),
     "AI_COMMIT_TRAILER": ("ai_commit_trailer", "Co-Authored-By: X"),
     "AI_TOOL_CREDIT": ("ai_tool_credit", "Claude Code"),
@@ -94,9 +93,11 @@ class SchemaTests(unittest.TestCase):
             self.assertEqual(project[field], "", field)
         self.assertIs(project["keep_licence"], True)
         self.assertEqual(cfg["providers"]["pm"], "")
+        self.assertNotIn("experiment_tool", project)
+        self.assertEqual(cfg["tools"], {key: "" for key in onboard.TOOL_KEYS})
 
     def test_every_known_placeholder_is_mapped_or_deliberately_left(self):
-        mapped = set(FIELD_CASES) | {"PM_TOOL"} | set(UNMAPPED)
+        mapped = set(FIELD_CASES) | onboard.DERIVED_PLACEHOLDERS | set(UNMAPPED)
         self.assertEqual(mapped, set(onboard.KNOWN_PLACEHOLDERS))
 
 
@@ -121,6 +122,40 @@ class SubstitutionTests(unittest.TestCase):
                 root = self.repo(tmp, toml_text(pm), {"a.md": ph("PM_TOOL")})
                 self.assertEqual(run_apply(root, "--root", str(root))[0], 0)
                 self.assertEqual((root / "a.md").read_text(), label)
+
+    def test_experiment_tool_derived_from_feature_flags(self):
+        for label, extra, expected in [
+            ("named", '[tools]\nfeature_flags = " Statsig "\n', "Statsig"),
+            ("none", '[tools]\nfeature_flags = "None"\n', "none"),
+            ("empty", '[tools]\nfeature_flags = ""\n', ph("EXPERIMENT_TOOL")),
+            ("no table", "", ph("EXPERIMENT_TOOL")),
+        ]:
+            with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
+                root = self.repo(tmp, toml_text("github", extra=extra), {"a.md": ph("EXPERIMENT_TOOL")})
+                code, _, err = run_apply(root, "--root", str(root))
+                self.assertEqual(code, 0, err)
+                self.assertEqual((root / "a.md").read_text(), expected)
+
+    def test_invalid_tools_value_is_rejected_before_any_write(self):
+        for line in ['feature_flags = "none (later)"', "analytics = 5", 'logging = "a\\nb"',
+                     'logging = "{{PROJECT_NAME}}"']:
+            with self.subTest(line), tempfile.TemporaryDirectory() as tmp:
+                root = self.repo(tmp, toml_text("github", extra="[tools]\n%s\n" % line, name="N"),
+                                 {"a.md": ph("PROJECT_NAME")})
+                before = snapshot(root)
+                code, _, err = run_apply(root, "--root", str(root))
+                self.assertEqual(code, 3)
+                self.assertIn("tools.", err)
+                self.assertEqual(snapshot(root), before)
+
+    def test_legacy_experiment_tool_key_is_not_warned_or_used(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp, toml_text("github", name="N", experiment_tool="Firebase"),
+                             {"a.md": ph("EXPERIMENT_TOOL")})
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            self.assertEqual(json.loads(out)["warnings"], [])
+            self.assertEqual((root / "a.md").read_text(), ph("EXPERIMENT_TOOL"))
 
     def test_unknown_pm_is_an_error_and_writes_nothing(self):
         for pm in ["trello", "jira", "github_issues", "files"]:
@@ -634,6 +669,11 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_repo(tmp, {"skill_router.toml": 'project = "x"\n'})
             self.assertEqual(run_apply(root, "--root", str(root))[0], 3)
+            (root / "skill_router.toml").write_text('tools = "none"\n' + toml_text("github"))
+            git(root, "add", "-A")
+            code, _, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 3)
+            self.assertIn("[tools]", err)
 
 
 class NoTomllibTests(unittest.TestCase):

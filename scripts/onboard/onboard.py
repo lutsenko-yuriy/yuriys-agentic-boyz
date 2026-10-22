@@ -61,12 +61,12 @@ TEMPLATE_TOKENS = [
 REQUIRED_PROJECT_FIELDS = ["name", "description", "issue_prefix"]
 NOTES_DIR = "docs/knowledge/notes"
 NOTES_SKIP = {"BOOKMARKS.md", "INDEX.md", "TEMPLATE.md"}
-# placeholder -> [project] field; PM_TOOL is derived from [providers].pm. Others (FRAMEWORK, STACK, ...) belong to the
-# tech-stack artifacts and are never filled by apply.
+# placeholder -> [project] field; DERIVED_PLACEHOLDERS come from other tables. Others (FRAMEWORK, STACK, ...) belong to
+# the tech-stack artifacts and are never filled by apply.
 PLACEHOLDER_FIELDS = {
     "AI_COMMIT_TRAILER": "ai_commit_trailer", "AI_TOOL_CREDIT": "ai_tool_credit",
     "ARCHITECTURE_SUMMARY": "architecture_summary", "AVAILABLE_MODELS": "available_models",
-    "EXPERIMENT_TOOL": "experiment_tool", "GIT_HOST": "git_host", "INTEGRATION_TEST_DIR": "integration_test_dir",
+    "GIT_HOST": "git_host", "INTEGRATION_TEST_DIR": "integration_test_dir",
     "IN_QA_PATHS": "in_qa_paths", "ISSUE_PREFIX": "issue_prefix", "PM_PROJECT_URL": "pm_project_url",
     "PROJECT_DESCRIPTION": "description", "PROJECT_ID": "project_id", "PROJECT_NAME": "name",
     "TEAM_ID": "team_id", "TEST_COMMAND": "test_command", "TEST_HARNESS_CLASS": "test_harness_class",
@@ -76,6 +76,14 @@ LIST_FIELDS = {"available_models", "in_qa_paths"}
 # Keys must be skill_router provider names (scripts/skill_router/providers): [providers].pm routes to that provider.
 PM_TOOLS = {"linear": "Linear", "github": "GitHub Issues"}
 PROJECT_KEYS = set(PLACEHOLDER_FIELDS.values()) | {"keep_licence"}
+# PM_TOOL from [providers].pm, EXPERIMENT_TOOL from [tools].feature_flags.
+DERIVED_PLACEHOLDERS = {"PM_TOOL", "EXPERIMENT_TOOL"}
+# Retired [project] keys: accepted without a warning, never substituted.
+LEGACY_PROJECT_KEYS = {"experiment_tool"}
+# [tools]: what the project uses for each role, a tool name or "none"; read by skills at runtime.
+TOOL_KEYS = ["analytics", "logging", "feature_flags"]
+TOOLS_LEGACY_WARNING = ("no [tools] table (onboarded before analytics/logging/feature-flag tools were recorded): "
+                        "add it by hand; skills assume the tools exist")
 MCP_LINEAR = {"type": "http", "url": "https://mcp.linear.app/mcp"}
 TOOLCHAINS = ["git", "gh", "ollama", "flutter", "dart", "node", "npm", "java", "gradle", "kotlinc", "cargo", "go", "ruby"]
 ENV_KEY_RE = re.compile(r"(_KEY|_TOKEN|_SECRET|_PAT)$")
@@ -319,10 +327,12 @@ def _read_config(root: Path) -> tuple:
         cfg = load_toml(path)
     except ValueError as e:
         raise OnboardError("skill_router.toml: %s" % e)
-    project, providers = cfg.get("project", {}), cfg.get("providers", {})
+    project, providers, tools = cfg.get("project", {}), cfg.get("providers", {}), cfg.get("tools")
     if not isinstance(project, dict) or not isinstance(providers, dict):
         raise OnboardError("skill_router.toml: [project] and [providers] must be tables")
-    return project, providers
+    if tools is not None and not isinstance(tools, dict):
+        raise OnboardError("skill_router.toml: [tools] must be a table")
+    return project, providers, tools
 
 
 def _pm(providers: Dict[str, Any]) -> Tuple[str, Optional[str]]:
@@ -336,11 +346,38 @@ def _pm(providers: Dict[str, Any]) -> Tuple[str, Optional[str]]:
     return pm, None
 
 
-def _check_config(root: Path, errors: List[str]) -> str:
+def _tools(table: Optional[Dict[str, Any]]) -> Tuple[Optional[Dict[str, str]], List[str]]:
+    """The normalised [tools] values ("" when unset; None without the table) and their errors; shared by check and apply.
+
+    Emptiness is not an error here: apply keeps the derived placeholder, and check reports it.
+    """
+    if table is None:
+        return None, []
+    tools: Dict[str, str] = {}
+    errors: List[str] = []
+    for key in TOOL_KEYS:
+        raw = table.get(key, "")
+        if not isinstance(raw, str):
+            errors.append("tools.%s must be a string" % key)
+            continue
+        value = raw.strip()
+        if "\n" in value or "\r" in value:
+            errors.append("tools.%s must be a single line" % key)
+        elif PLACEHOLDER_RE.search(value):
+            errors.append("tools.%s must not contain a {{PLACEHOLDER}}" % key)
+        elif value.lower() == "none":
+            value = "none"
+        elif re.match(r"none\b", value, re.I):
+            errors.append("tools.%s must be exactly none or a tool name, not %r" % (key, value))
+        tools[key] = value
+    return tools, errors
+
+
+def _check_config(root: Path, errors: List[str], warnings: List[str]) -> str:
     if not (root / "skill_router.toml").is_file():
         errors.append("skill_router.toml missing")
         return ""
-    project, providers = _read_config(root)
+    project, providers, table = _read_config(root)
     for field in REQUIRED_PROJECT_FIELDS:
         if not str(project.get(field, "")).strip():
             errors.append("project.%s is empty" % field)
@@ -357,6 +394,12 @@ def _check_config(root: Path, errors: List[str]) -> str:
                       "move a legacy [linear].project_id there)")
     elif pm == "linear" and re.match(r"none\b", str(project.get("project_id", "")).strip(), re.I):
         errors.append("project.project_id must be a real id when providers.pm is linear, not 'none'")
+    tools, tool_errors = _tools(table)
+    errors.extend(tool_errors)
+    if tools is None:
+        warnings.append(TOOLS_LEGACY_WARNING)
+    else:
+        errors.extend("tools.%s is empty (a tool name, or none)" % k for k in TOOL_KEYS if tools.get(k) == "")
     return prefix
 
 
@@ -402,9 +445,11 @@ def check(root: Path) -> Dict[str, Any]:
     if not template_mode and _template_readme(root):
         errors.append('README.md is still the YAB template README ("%s"): write the project\'s own' % TEMPLATE_README_TITLE)
     config_errors: List[str] = []
-    prefix = _check_config(root, config_errors)
+    config_warnings: List[str] = []
+    prefix = _check_config(root, config_errors, config_warnings)
     if not template_mode:
         errors.extend(config_errors)
+        warnings.extend(config_warnings)
     if "docs/TECH_STACK.md" in texts:
         langs = _languages(texts["docs/TECH_STACK.md"])
         if not langs:
@@ -428,7 +473,7 @@ def check(root: Path) -> Dict[str, Any]:
     }
 
 
-def _values(project: Dict[str, Any], pm: str) -> Dict[str, str]:
+def _values(project: Dict[str, Any], pm: str, tools: Optional[Dict[str, str]]) -> Dict[str, str]:
     """Non-empty placeholder values only: an empty one must stay a placeholder so `check` still reports it."""
     values: Dict[str, str] = {}
     for name, field in PLACEHOLDER_FIELDS.items():
@@ -448,6 +493,8 @@ def _values(project: Dict[str, Any], pm: str) -> Dict[str, str]:
             values[name] = raw
     if pm:
         values["PM_TOOL"] = PM_TOOLS[pm]
+    if tools and tools["feature_flags"]:
+        values["EXPERIMENT_TOOL"] = tools["feature_flags"]
     return values
 
 
@@ -505,15 +552,19 @@ def apply(root: Path) -> Dict[str, Any]:
     untracked = _untracked_problem(root)
     if untracked:
         raise Refused(untracked)
-    project, providers = _read_config(root)
+    project, providers, table = _read_config(root)
     pm, pm_error = _pm(providers)
     if pm_error:
         raise OnboardError("skill_router.toml: %s" % pm_error)
+    tools, tool_errors = _tools(table)
+    if tool_errors:
+        raise OnboardError("skill_router.toml: %s" % "; ".join(tool_errors))
     keep_licence = project.get("keep_licence", True)
     if not isinstance(keep_licence, bool):
         raise OnboardError("skill_router.toml: project.keep_licence must be true or false")
-    values = _values(project, pm)
-    warnings = ["skill_router.toml: unknown project.%s ignored" % k for k in sorted(set(project) - PROJECT_KEYS)]
+    values = _values(project, pm, tools)
+    unknown = set(project) - PROJECT_KEYS - LEGACY_PROJECT_KEYS
+    warnings = ["skill_router.toml: unknown project.%s ignored" % k for k in sorted(unknown)]
     mcp = _plan_mcp(root, pm)
     sentinel = root / ".yab-template"
     sentinel_deleted = os.path.lexists(sentinel) and not sentinel.is_dir()

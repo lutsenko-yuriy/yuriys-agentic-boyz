@@ -134,6 +134,11 @@ name = "Habit Loop"
 description = "d"
 issue_prefix = "HL"
 project_id = "p1"
+
+[tools]
+analytics = "Firebase"
+logging = "none"
+feature_flags = "Firebase"
 """
 GOOD_ARTIFACT = "# Doc\n"
 GOOD_TECH = "## Languages\n\n| Language | Version |\n|---|---|\n| Dart | 3.6 |\n\n## Platforms\n"
@@ -273,6 +278,50 @@ class CheckTests(unittest.TestCase):
             self.assertNotIn("project.project_id", self.msgs(r), real)
         gh = GOOD_TOML.replace('project_id = "p1"', 'project_id = "none"').replace('"linear"', '"github"')
         self.assertNotIn("project.project_id", self.msgs(self.check({"skill_router.toml": gh})))
+
+    def test_missing_tools_table_is_a_legacy_warning_not_an_error(self):
+        toml = GOOD_TOML.split("[tools]")[0]
+        r = self.check({"skill_router.toml": toml})
+        self.assertTrue(r["ok"], r)
+        self.assertIn("no [tools] table", self.msgs(r, "warnings"))
+        self.assertNotIn("[tools]", self.msgs(self.check(), "warnings"))
+
+    def test_tools_values_validated(self):
+        def with_logging(line):
+            return GOOD_TOML.replace('logging = "none"\n', line)
+
+        for line, expected in [
+            ("", "tools.logging is empty (a tool name, or none)"),
+            ('logging = "  "\n', "tools.logging is empty (a tool name, or none)"),
+            ("logging = 5\n", "tools.logging must be a string"),
+            ('logging = "a\\nb"\n', "tools.logging must be a single line"),
+            ('logging = "{{PROJECT_NAME}}"\n', "tools.logging must not contain a {{PLACEHOLDER}}"),
+            ('logging = "none (stdout)"\n', "tools.logging must be exactly none"),
+            ('logging = "None - later"\n', "tools.logging must be exactly none"),
+        ]:
+            with self.subTest(line):
+                r = self.check({"skill_router.toml": with_logging(line)})
+                self.assertFalse(r["ok"])
+                self.assertIn(expected, self.msgs(r))
+
+    def test_tools_accept_none_any_case_and_tool_names(self):
+        for value in ("None", " NONE ", "Sentry", "Nonesuch Logs"):
+            with self.subTest(value):
+                r = self.check({"skill_router.toml": GOOD_TOML.replace('logging = "none"', 'logging = "%s"' % value)})
+                self.assertTrue(r["ok"], r)
+
+    def test_tools_normalised(self):
+        tools, errors = onboard._tools({"analytics": " PostHog ", "logging": "NONE", "feature_flags": "None"})
+        self.assertEqual(errors, [])
+        self.assertEqual(tools, {"analytics": "PostHog", "logging": "none", "feature_flags": "none"})
+        self.assertEqual(onboard._tools(None), (None, []))
+
+    def test_template_mode_suppresses_tools_errors_and_warning(self):
+        for toml in ('[providers]\n\n[tools]\nanalytics = ""\nlogging = 5\n', "[providers]\n"):
+            with self.subTest(toml):
+                r = self.check({".yab-template": YAB_SENTINEL, "skill_router.toml": toml}, origin=YAB_ORIGIN)
+                self.assertTrue(r["ok"], r)
+                self.assertNotIn("tools", self.msgs(r, "warnings"))
 
     def test_invalid_prefix(self):
         for bad in ["N/A", "NA", "A B", ""]:
@@ -503,6 +552,11 @@ class CheckTests(unittest.TestCase):
             with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", new_callable=io.StringIO) as err:
                 self.assertEqual(onboard.main(["--root", str(root), "check"]), 3)
             self.assertIn("skill_router.toml", err.getvalue())
+            (root / "skill_router.toml").write_text('tools = "none"\n' + GOOD_TOML.split("[tools]")[0])
+            git(root, "add", "-A")
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+                self.assertEqual(onboard.main(["--root", str(root), "check"]), 3)
+            self.assertIn("[tools]", err.getvalue())
 
     def test_non_utf8_tracked_filename_does_not_abort(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -757,7 +811,7 @@ class PlaceholderCoverageTests(unittest.TestCase):
     def test_every_placeholder_is_fillable_or_in_a_bootstrap_file(self):
         from scripts.onboard import gate
 
-        fillable = set(onboard.PLACEHOLDER_FIELDS) | {"PM_TOOL"}
+        fillable = set(onboard.PLACEHOLDER_FIELDS) | onboard.DERIVED_PLACEHOLDERS
         tracked = git(REPO_ROOT, "ls-files").splitlines()
         stranded = []
         for rel in tracked:

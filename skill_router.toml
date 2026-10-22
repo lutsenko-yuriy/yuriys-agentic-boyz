@@ -19,7 +19,6 @@ git_host = ""
 pm_project_url = ""
 team_id = ""
 project_id = ""
-experiment_tool = ""
 available_models = ""
 ai_commit_trailer = ""
 ai_tool_credit = ""
@@ -32,6 +31,13 @@ version_field = ""
 in_qa_paths = ""
 # false: apply deletes LICENSE (the project is not MIT-licensed like the template).
 keep_licence = true
+
+[tools]
+# What the project uses for each role: a tool name (e.g. "Firebase", "PostHog", "Sentry"), or "none".
+# Empty in the template; /onboard fills it in. One tool may fill several roles.
+analytics = ""
+logging = ""
+feature_flags = ""
 
 [llm]
 lmstudio_base = "http://localhost:1234/v1"
