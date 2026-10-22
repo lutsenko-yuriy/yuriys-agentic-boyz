@@ -436,7 +436,8 @@ class TemplateFlowTest(unittest.TestCase):
             root = make_clone(tmp, "https://github.com/me/proj.git", sentinel=True)
             write_config(root)
             self.assertTrue(onboard.apply(root)["changelog_reset"])
-            self.assertNotIn("## [Unreleased]", (root / "docs/CHANGELOG.md").read_text())
+            text = (root / "docs/CHANGELOG.md").read_text()
+            self.assertNotIn("## [Unreleased]", onboard._strip_comments(text))  # the footer comment shows the format
             errors = onboard.check(root)["errors"]
             self.assertTrue(any(e.startswith("README.md is still the YAB template README") for e in errors))
 

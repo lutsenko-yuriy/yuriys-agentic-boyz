@@ -23,11 +23,21 @@ A record of all versioned releases. For planned work and known issues, see @docs
 
 ---
 
-<!-- This file is maintained by the Product Owner agent.
-     New sections are prepended after each merged PR in the format:
+<!-- /ship appends one line per merged PR under the single [Unreleased] heading at the top:
 
-## [X.Y.Z] — YYYY-MM-DD (PR #N merged)
+## [Unreleased]
+- #N: <summary> (PR #M) [user] MINOR flags: <flag>
+- #N: <summary> (PR #M) [meta]
 
-### Added / Changed / Fixed
-- ...
+     /prepare-release moves the selected lines under a new release heading:
+
+## [X.Y.Z] — YYYY-MM-DD
+
+### Release notes
+- <plain-language bullet>
+
+### Changes
+- #N: <summary> (PR #M) [user] MINOR flags: <flag>
+
+     Grammar: skills/manage/ship/resources/changelog-tags.md. Check: python3 scripts/changelog/changelog.py lint docs/CHANGELOG.md
 -->

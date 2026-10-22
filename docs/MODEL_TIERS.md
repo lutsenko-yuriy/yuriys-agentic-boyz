@@ -44,7 +44,7 @@ This project describes what each skill needs from a model using two axes: **Effo
 | `analyze` | FOCUSED | ARCHITECTURAL | Cross-cutting analytics reasoning scoped to one feature |
 | `experiment` | FOCUSED | ARCHITECTURAL | Design a product experiment: hypothesis, metrics, variant spec |
 | `implement` | FOCUSED | TACTICAL | Implement a scoped work unit correctly and completely |
-| `ship` | RAPID | TACTICAL | Structured housekeeping: close issues, update docs, bump version, merge |
+| `ship` | RAPID | TACTICAL | Structured housekeeping: close issues, add a marked CHANGELOG line, update docs, merge |
 | `summarize` | RAPID | MECHANICAL | Structured PM data fetch and format |
 
 ---
