@@ -29,6 +29,13 @@ Retrieve the full details of the issue (title, description, acceptance criteria,
 
 Read `docs/ANALYTICS_EVENTS.md` in full to understand what is already tracked and avoid proposing duplicates.
 
+### 2a. Check the analytics tool
+
+Read `[tools].analytics` in `skill_router.toml` (see `skills/shared/project-config.md`).
+
+- **`none`:** run every step anyway. Open the plan with the template's "Not sent yet" status line; the approved entries are appended to the catalogue as planned events, and step 9 tells the orchestrator that `implement` has no instrumentation call to add.
+- **A tool name, or no `[tools]` table:** continue as below.
+
 ### 3. Read the product context
 
 Read `docs/PRODUCT_SPEC.md` and any relevant source files to understand the user journey this feature sits within. Look for existing screen names, navigation patterns, and event naming conventions already used in the codebase.
@@ -76,4 +83,4 @@ Do not modify existing entries — only append.
 
 ### 9. Report back
 
-Confirm what was added to `docs/ANALYTICS_EVENTS.md`. Remind the orchestrator that `implement` should include the instrumentation calls defined here.
+Confirm what was added to `docs/ANALYTICS_EVENTS.md`. Remind the orchestrator that `implement` should include the instrumentation calls defined here. When `[tools].analytics` is `none`, say instead that there is no instrumentation call to add until a tool is adopted.

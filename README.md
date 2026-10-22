@@ -33,7 +33,7 @@ Until onboarding finishes, a gate (hooks in `.claude/settings.json`, `scripts/on
 
 It probes your machine, infers the stack from the repo, asks only what it cannot infer, and produces:
 
-- `skill_router.toml` `[project]` (name, issue prefix, git host, test command, and so on) and `[providers].pm` (`linear` or `github`)
+- `skill_router.toml` `[project]` (name, issue prefix, git host, test command, and so on), `[providers].pm` (`linear` or `github`) and `[tools]` (the analytics, logging and feature-flag tools: a tool name or `none` each)
 - `docs/TECH_STACK.md`, `docs/CODE_STYLE.md`, `docs/CONSTRAINTS.md`
 - `docs/ARCHITECTURE.md`, the Common Commands in `AGENTS.md`, and the model tier mapping in `docs/MODEL_TIERS.md`
 - in a project created from this template, a `README.md` of its own in place of this one

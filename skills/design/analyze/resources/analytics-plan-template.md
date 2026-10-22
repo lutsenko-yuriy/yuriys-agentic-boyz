@@ -1,5 +1,8 @@
 ## Analytics plan — {{ISSUE_PREFIX}}-XX: <title>
 
+<!-- Only when [tools].analytics is none; omit this line otherwise. -->
+> Not sent yet: no analytics tool recorded. These events are planned, not instrumented.
+
 ### Screen views
 | Screen name | Trigger | Properties |
 |---|---|---|

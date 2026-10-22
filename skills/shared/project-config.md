@@ -2,11 +2,23 @@
 
 Read this file to resolve all project-specific constants referenced in skill instructions.
 Project identity (name, issue prefix, git host, PM tool, test/version settings) lives in `skill_router.toml`
-(`[project]`, `[providers]`). Skills stay unchanged.
+(`[project]`, `[providers]`, `[tools]`). Skills stay unchanged.
 
 ## Tech stack
 
 Languages, frameworks, platforms and tooling: `docs/TECH_STACK.md`.
+
+## Tools
+
+What the project uses for each role, recorded by `/onboard` in `skill_router.toml` `[tools]`: a tool name, or `none` (no such tool yet; a deliberate answer, not a gap). One tool may fill several roles.
+
+| Key | Role |
+|---|---|
+| `[tools].analytics` | Analytics: where the events in `docs/ANALYTICS_EVENTS.md` are sent |
+| `[tools].logging` | Logging and crash reporting |
+| `[tools].feature_flags` | Feature flags: kill-switches and remote config; also the experiment tool |
+
+A missing `[tools]` table means the project was onboarded before these were recorded: assume a tool exists (the previous behaviour).
 
 ## Project management
 

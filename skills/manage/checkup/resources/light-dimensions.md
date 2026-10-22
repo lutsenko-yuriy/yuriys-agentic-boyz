@@ -28,6 +28,10 @@ Sampled read of the project's key docs (architecture, product spec, feature-flag
 
 ## 5. Feature-flag lifecycle
 
-If the project uses feature flags/kill-switches, for each one: still needed? how old? assign or verify a review-by date; flag stale kill-switches for removal. Skip this dimension if the project has no feature-flag mechanism.
+Read `[tools].feature_flags` in `skill_router.toml` (see `skills/shared/project-config.md`):
+
+- **`none`:** skip this dimension and state the recorded choice (no feature-flag tool).
+- **A tool name:** audit the flags in that tool. For each one: still needed? how old? assign or verify a review-by date; flag stale kill-switches for removal.
+- **No `[tools]` table:** if the project uses feature flags/kill-switches, audit each one as above. Skip this dimension if the project has no feature-flag mechanism.
 
 *Grounding: feature-flag audit practice — an explicit per-flag expiration/review-by date, because stale flags compound ([Statsig](https://www.statsig.com/perspectives/tips-for-unused-feature-flag-clean-up) · [FlagShark](https://flagshark.com/blog/feature-flag-lifecycle-creation-cleanup-5-stages/)).*

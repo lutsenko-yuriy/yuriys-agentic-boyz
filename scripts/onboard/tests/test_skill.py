@@ -217,6 +217,19 @@ class ConfigAgreementTest(unittest.TestCase):
         keys = (block("tool-keys", SKILL.read_text(encoding="utf-8")) or "").split()
         self.assertEqual(onboard.TOOL_KEYS, keys)
 
+    def test_tool_consumers_name_their_key(self):
+        config = (ROOT / "skills/shared/project-config.md").read_text(encoding="utf-8")
+        for key in onboard.TOOL_KEYS:
+            self.assertIn("`[tools].%s`" % key, config)
+        for rel, key in [
+            ("skills/design/analyze/SKILL.md", "analytics"),
+            ("docs/ANALYTICS_EVENTS.md", "analytics"),
+            ("docs/workflows/FEATURE.md", "feature_flags"),
+            ("skills/manage/checkup/resources/light-dimensions.md", "feature_flags"),
+        ]:
+            with self.subTest(rel):
+                self.assertIn("[tools].%s" % key, (ROOT / rel).read_text(encoding="utf-8"))
+
     def test_every_key_needs_a_concrete_value(self):
         text = SKILL.read_text(encoding="utf-8")
         self.assertRegex(text, r"never leave a key empty")
