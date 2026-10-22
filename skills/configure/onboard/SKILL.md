@@ -86,18 +86,22 @@ Never run `git remote` yourself (use `remote`), touch the template sentinel your
 Read `README.md` (unless it is still the YAB template README, titled "Multi-Agent Project Template": then do not infer the name or description from it, ask the user), the manifests and `git log --oneline -20` first and propose answers; ask only what cannot be inferred. Then Edit `skill_router.toml`:
 
 - `[providers].pm`: exactly `"linear"` or `"github"` (GitHub Issues). It is mandatory and the only record of the PM tool. If the choice is Linear, check the Linear MCP is authenticated (ask the user to run `/mcp` if the read tools are unavailable) and look up the team and project with `mcp__linear__list_teams` and `mcp__linear__list_projects`.
+- `[tools]`: ask three questions, one at a time: which tool the project uses for analytics, for logging, and for feature flags (kill-switches or remote config). Propose answers inferred from the manifests and dependencies first (e.g. a Firebase, PostHog, Sentry or Statsig SDK). Each answer is a tool name or `none`, and one tool may cover several roles. `none` is a real answer that skills act on: record it, never leave one of these keys empty, and generate no code or SDK setup for any of them.
+
+<!-- onboard:tool-keys analytics logging feature_flags -->
+
 - `[project]`: supply these keys. Prefix rule: letters and digits, 2-10 characters, starting with a letter, not `N/A`; default is the initials of a multi-word name, the capital letters of a CamelCase name, or the first 3 letters otherwise.
 
 <!-- onboard:project-keys
 name description architecture_summary issue_prefix git_host pm_project_url team_id project_id
-experiment_tool available_models ai_commit_trailer ai_tool_credit test_command integration_test_dir
+available_models ai_commit_trailer ai_tool_credit test_command integration_test_dir
 test_harness_file test_harness_class version_file version_field in_qa_paths keep_licence
 -->
 
-Rules: every key gets a concrete single-line value; never leave a key empty. An empty value keeps its placeholder, and some placeholders sit in files outside the list above (experiments, backlog, implement and review skills), so `check` could then never go clean. But a bare `none` is pasted verbatim by most consumers (commit trailers, PR bodies, the backlog link, project-config tables), so it is only allowed for these keys, whose consumers read it naturally (the experiment line in the experiments README; the team and project ids have no consumer outside the router, which uses the project id only for Linear):
+Rules: every key gets a concrete single-line value; never leave a key empty. An empty value keeps its placeholder, and some placeholders sit in files outside the list above (experiments, backlog, implement and review skills), so `check` could then never go clean. But a bare `none` is pasted verbatim by most consumers (commit trailers, PR bodies, the backlog link, project-config tables), so it is only allowed for these keys, whose consumers read it naturally (the team and project ids have no consumer outside the router, which uses the project id only for Linear):
 
 <!-- onboard:none-ok
-experiment_tool team_id project_id
+team_id project_id
 -->
 
 Every other key needs a real value:
@@ -112,7 +116,7 @@ Proposed defaults: `ai_commit_trailer` is the current agent's trailer line (for 
 
 ### 4. Apply
 
-Run `apply`. It substitutes the `[project]` values everywhere, reconciles `.mcp.json` with `pm` and clears the template sentinel; in a template clone it also empties the template's `docs/CHANGELOG.md` (`changelog_reset`). Report its `changed`, `unresolved` and `warnings`. Re-running is safe.
+Run `apply`. It substitutes the `[project]` values everywhere (and `EXPERIMENT_TOOL`, the experiment line in `docs/experiments/README.md`, from `[tools].feature_flags`), reconciles `.mcp.json` with `pm` and clears the template sentinel; in a template clone it also empties the template's `docs/CHANGELOG.md` (`changelog_reset`). Report its `changed`, `unresolved` and `warnings`. Re-running is safe.
 
 `apply` supplies every placeholder that has a `[project]` key. The one placeholder it never supplies is `CODE_STYLE` in `AGENTS.md`, which step 6 handles. If `unresolved` lists anything else, correct the value in `skill_router.toml` and re-run `apply`; values for `skills/shared/project-config.md` (test, version, QA fields) come from there too, so that file needs no hand edit.
 
