@@ -19,6 +19,7 @@ A record of all versioned releases. For planned work and known issues, see @docs
 - HAB-278 WU19: onboard.py remote (template clone origin: new GitHub repo via gh, URL, or none; push URL cleared) + /onboard step A runs it with consent; gate.sh fast path skips Python when onboarded (PR #24) [wip]
 - HAB-278 WU20: template clones get a project README and an empty CHANGELOG — apply empties the template CHANGELOG with a YAB sentinel (staged-only counts; unstaged edits kept and warned); check errors on a README still titled "Multi-Agent Project Template"; README.md is a bootstrap path and /onboard step 6 writes it (PR #25) [wip]
 - HAB-278 WU21: skill_router fixes (warn when skill_router.toml unreadable without tomllib; exit 2 when a context provider lacks fetch_context/format_context), AGENTS.md session start reads [providers].pm ({{ISSUE_PREFIX}}-N = GitHub issue #N with github), skill_router tests run in their own CI job on 3.9/3.12 (PR #26) [wip]
+- #42: /onboard asks for analytics, logging and feature-flag tools ([tools] in skill_router.toml; none is a recorded answer; /analyze, FEATURE 1.4 and checkup act on it) (PR #43) [meta]
 
 ---
 
