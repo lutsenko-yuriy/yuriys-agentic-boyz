@@ -10,6 +10,7 @@ The mark and `flags:` are written without brackets, and are present only as the 
 - **Mark**: `MAJOR`, `MINOR` or `PATCH`, the semver step this change needs. Required on `[user]`/`[app]` lines, forbidden on all others.
 - **Flags**: only after a mark, and only when `skill_router.toml` `[tools].feature_flags` is not `none` and the feature has flags. Names the flags that switch the feature on and off; names match `[A-Za-z0-9_.-]+`, comma-separated.
 - `(PR #N)` is optional.
+- **One line per entry, no wrapping.** In `[Unreleased]`, lint accepts only entry lines, `### ` subheadings, blank lines, `---` and HTML comments; a continuation line or prose note is a finding.
 
 Examples:
 
