@@ -95,6 +95,7 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(cfg["providers"]["pm"], "")
         self.assertNotIn("experiment_tool", project)
         self.assertEqual(cfg["tools"], {key: "" for key in onboard.TOOL_KEYS})
+        self.assertEqual(cfg["release"], {key: "" for key in onboard.RELEASE_KEYS})
 
     def test_every_known_placeholder_is_mapped_or_deliberately_left(self):
         mapped = set(FIELD_CASES) | onboard.DERIVED_PLACEHOLDERS | set(UNMAPPED)
@@ -147,6 +148,28 @@ class SubstitutionTests(unittest.TestCase):
                 self.assertEqual(code, 3)
                 self.assertIn("tools.", err)
                 self.assertEqual(snapshot(root), before)
+
+    def test_invalid_release_value_is_rejected_before_any_write(self):
+        for line in ['job = "none (later)"', "job = 5", 'version_gates = "a\\nb"', 'job = "{{PROJECT_NAME}}"']:
+            with self.subTest(line), tempfile.TemporaryDirectory() as tmp:
+                root = self.repo(tmp, toml_text("github", extra="[release]\n%s\n" % line, name="N"),
+                                 {"a.md": ph("PROJECT_NAME")})
+                before = snapshot(root)
+                code, _, err = run_apply(root, "--root", str(root))
+                self.assertEqual(code, 3)
+                self.assertIn("release.", err)
+                self.assertEqual(snapshot(root), before)
+
+    def test_release_table_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            extra = '[release]\njob = "echo {tag} {version}"\nversion_gates = "none"\njobs = "x"\n'
+            toml = toml_text("github", extra=extra, name="N")
+            root = self.repo(tmp, toml, {"a.md": ph("PROJECT_NAME") + " {version}"})
+            code, out, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            self.assertEqual((root / "skill_router.toml").read_text(), toml)
+            self.assertEqual((root / "a.md").read_text(), "N {version}")
+            self.assertEqual(json.loads(out)["warnings"], ["skill_router.toml: unknown release.jobs ignored"])
 
     def test_legacy_experiment_tool_key_is_a_fallback_without_tools_table(self):
         for label, extra, expected in [

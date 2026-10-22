@@ -37,6 +37,11 @@ class ProjectIdTests(unittest.TestCase):
         self.assertEqual(cfg.provider_roles, {"pm": "github"})
         self.assertNotIn("tools", cfg.provider_settings)
 
+    def test_release_table_is_neither_a_role_nor_a_provider(self):
+        cfg = config_from('[providers]\npm = "github"\n\n[release]\njob = "none"\nversion_gates = "none"\n')
+        self.assertEqual(cfg.provider_roles, {"pm": "github"})
+        self.assertNotIn("release", cfg.provider_settings)
+
     def test_no_project_id_anywhere(self):
         self.assertNotIn("linear", config_from('[providers]\npm = "linear"\n').provider_settings)
 

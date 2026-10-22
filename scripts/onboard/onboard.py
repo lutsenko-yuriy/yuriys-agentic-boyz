@@ -85,6 +85,11 @@ LEGACY_PROJECT_KEYS = {"experiment_tool"}
 TOOL_KEYS = ["analytics", "logging", "feature_flags"]
 TOOLS_LEGACY_WARNING = ("no [tools] table (onboarded before analytics/logging/feature-flag tools were recorded): "
                         "add it by hand; skills assume the tools exist")
+# [release]: how /prepare-release publishes, a command or location, or "none"; read by skills at runtime.
+RELEASE_KEYS = ["job", "version_gates"]
+RELEASE_EMPTY = {"job": "a command, or none", "version_gates": "a file and symbol, or none"}
+RELEASE_LEGACY_WARNING = ("no [release] table (onboarded before the release job and version gates were recorded): "
+                          "add it by hand; /prepare-release stops after the tag and asks for the gate location")
 MCP_LINEAR = {"type": "http", "url": "https://mcp.linear.app/mcp"}
 TOOLCHAINS = ["git", "gh", "ollama", "flutter", "dart", "node", "npm", "java", "gradle", "kotlinc", "cargo", "go", "ruby"]
 ENV_KEY_RE = re.compile(r"(_KEY|_TOKEN|_SECRET|_PAT)$")
@@ -328,12 +333,13 @@ def _read_config(root: Path) -> tuple:
         cfg = load_toml(path)
     except ValueError as e:
         raise OnboardError("skill_router.toml: %s" % e)
-    project, providers, tools = cfg.get("project", {}), cfg.get("providers", {}), cfg.get("tools")
+    project, providers = cfg.get("project", {}), cfg.get("providers", {})
     if not isinstance(project, dict) or not isinstance(providers, dict):
         raise OnboardError("skill_router.toml: [project] and [providers] must be tables")
-    if tools is not None and not isinstance(tools, dict):
-        raise OnboardError("skill_router.toml: [tools] must be a table")
-    return project, providers, tools
+    for name in ("tools", "release"):
+        if cfg.get(name) is not None and not isinstance(cfg[name], dict):
+            raise OnboardError("skill_router.toml: [%s] must be a table" % name)
+    return project, providers, cfg.get("tools"), cfg.get("release")
 
 
 def _pm(providers: Dict[str, Any]) -> Tuple[str, Optional[str]]:
@@ -347,39 +353,50 @@ def _pm(providers: Dict[str, Any]) -> Tuple[str, Optional[str]]:
     return pm, None
 
 
-def _tools(table: Optional[Dict[str, Any]]) -> Tuple[Optional[Dict[str, str]], List[str]]:
-    """Normalised [tools] values (None without the table) and errors; empty is left to check, so apply keeps the placeholder."""
+def _named_values(table: Optional[Dict[str, Any]], section: str, keys: List[str],
+                  what: str) -> Tuple[Optional[Dict[str, str]], List[str]]:
+    """Normalised single-line-or-none values (None without the table) and errors; empty is left to check."""
     if table is None:
         return None, []
-    tools: Dict[str, str] = {}
+    values: Dict[str, str] = {}
     errors: List[str] = []
-    for key in TOOL_KEYS:
+    for key in keys:
         raw = table.get(key, "")
         if not isinstance(raw, str):
-            errors.append("tools.%s must be a string" % key)
+            errors.append("%s.%s must be a string" % (section, key))
             continue
         value = raw.strip()
         if "\n" in value or "\r" in value:
-            errors.append("tools.%s must be a single line" % key)
+            errors.append("%s.%s must be a single line" % (section, key))
         elif PLACEHOLDER_RE.search(value):
-            errors.append("tools.%s must not contain a {{PLACEHOLDER}}" % key)
+            errors.append("%s.%s must not contain a {{PLACEHOLDER}}" % (section, key))
         elif value.lower() == "none":
             value = "none"
         elif re.match(r"none\b", value, re.I):
-            errors.append("tools.%s must be exactly none or a tool name, not %r" % (key, value))
-        tools[key] = value
-    return tools, errors
+            errors.append("%s.%s must be exactly none or %s, not %r" % (section, key, what, value))
+        values[key] = value
+    return values, errors
 
 
-def _unknown_tools(table: Optional[Dict[str, Any]]) -> List[str]:
-    return ["skill_router.toml: unknown tools.%s ignored" % k for k in sorted(set(table or {}) - set(TOOL_KEYS))]
+def _tools(table: Optional[Dict[str, Any]]) -> Tuple[Optional[Dict[str, str]], List[str]]:
+    """Normalised [tools] values; empty is left to check, so apply keeps the placeholder."""
+    return _named_values(table, "tools", TOOL_KEYS, "a tool name")
+
+
+def _release(table: Optional[Dict[str, Any]]) -> Tuple[Optional[Dict[str, str]], List[str]]:
+    """Normalised [release] values; apply substitutes none of them, skills read them at runtime."""
+    return _named_values(table, "release", RELEASE_KEYS, "a value")
+
+
+def _unknown_keys(table: Optional[Dict[str, Any]], section: str, keys: List[str]) -> List[str]:
+    return ["skill_router.toml: unknown %s.%s ignored" % (section, k) for k in sorted(set(table or {}) - set(keys))]
 
 
 def _check_config(root: Path, errors: List[str], warnings: List[str]) -> str:
     if not (root / "skill_router.toml").is_file():
         errors.append("skill_router.toml missing")
         return ""
-    project, providers, table = _read_config(root)
+    project, providers, table, release_table = _read_config(root)
     for field in REQUIRED_PROJECT_FIELDS:
         if not str(project.get(field, "")).strip():
             errors.append("project.%s is empty" % field)
@@ -398,11 +415,18 @@ def _check_config(root: Path, errors: List[str], warnings: List[str]) -> str:
         errors.append("project.project_id must be a real id when providers.pm is linear, not 'none'")
     tools, tool_errors = _tools(table)
     errors.extend(tool_errors)
-    warnings.extend(_unknown_tools(table))
+    warnings.extend(_unknown_keys(table, "tools", TOOL_KEYS))
     if tools is None:
         warnings.append(TOOLS_LEGACY_WARNING)
     else:
         errors.extend("tools.%s is empty (a tool name, or none)" % k for k in TOOL_KEYS if tools.get(k) == "")
+    release, release_errors = _release(release_table)
+    errors.extend(release_errors)
+    warnings.extend(_unknown_keys(release_table, "release", RELEASE_KEYS))
+    if release is None:
+        warnings.append(RELEASE_LEGACY_WARNING)
+    else:
+        errors.extend("release.%s is empty (%s)" % (k, RELEASE_EMPTY[k]) for k in RELEASE_KEYS if release.get(k) == "")
     return prefix
 
 
@@ -560,11 +584,12 @@ def apply(root: Path) -> Dict[str, Any]:
     untracked = _untracked_problem(root)
     if untracked:
         raise Refused(untracked)
-    project, providers, table = _read_config(root)
+    project, providers, table, release_table = _read_config(root)
     pm, pm_error = _pm(providers)
     if pm_error:
         raise OnboardError("skill_router.toml: %s" % pm_error)
     tools, tool_errors = _tools(table)
+    tool_errors += _release(release_table)[1]
     if tool_errors:
         raise OnboardError("skill_router.toml: %s" % "; ".join(tool_errors))
     keep_licence = project.get("keep_licence", True)
@@ -573,7 +598,8 @@ def apply(root: Path) -> Dict[str, Any]:
     values = _values(project, pm, tools)
     unknown = set(project) - PROJECT_KEYS - LEGACY_PROJECT_KEYS
     warnings = ["skill_router.toml: unknown project.%s ignored" % k for k in sorted(unknown)]
-    warnings.extend(_unknown_tools(table))
+    warnings.extend(_unknown_keys(table, "tools", TOOL_KEYS))
+    warnings.extend(_unknown_keys(release_table, "release", RELEASE_KEYS))
     mcp = _plan_mcp(root, pm)
     sentinel = root / ".yab-template"
     sentinel_deleted = os.path.lexists(sentinel) and not sentinel.is_dir()
