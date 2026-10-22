@@ -90,6 +90,14 @@ Read `README.md` (unless it is still the YAB template README, titled "Multi-Agen
 
 <!-- onboard:tool-keys analytics logging feature_flags -->
 
+- `[release]`: how `/prepare-release` publishes (`skills/shared/project-config.md`, Release). Ask after `[tools]`, one question at a time, proposing answers from the CI config (e.g. a release workflow under `.github/workflows/`) and the code first:
+  - `job`: "Which single command starts your release job once the `vX.Y.Z` tag is pushed?" (a GitHub Actions workflow dispatch, a GitLab pipeline run, and so on; examples are in project-config.md). `{version}` and `{tag}` are substituted at release time. `none` when releases are published by hand or a tag push already triggers CI.
+  - `version_gates`: "Where does the project record the minimum app version each feature flag needs?", as a file and symbol, e.g. `lib/config/flags.dart (Flags.releaseVersions)`, or `none`. When `[tools].feature_flags` is `none`, record `none` for `version_gates` without asking.
+
+  Record `none` rather than leaving a key empty, as for `[tools]`.
+
+<!-- onboard:release-keys job version_gates -->
+
 - `[project]`: supply these keys. Prefix rule: letters and digits, 2-10 characters, starting with a letter, not `N/A`; default is the initials of a multi-word name, the capital letters of a CamelCase name, or the first 3 letters otherwise.
 
 <!-- onboard:project-keys

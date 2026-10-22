@@ -241,6 +241,34 @@ class ConfigAgreementTest(unittest.TestCase):
                 self.assertIn("skills/shared/project-config.md", text)
                 self.assertNotRegex(text, r"(?i)(missing|no) `\[tools\]` table|empty value")
 
+    def test_release_keys_match(self):
+        keys = (block("release-keys", SKILL.read_text(encoding="utf-8")) or "").split()
+        self.assertEqual(onboard.RELEASE_KEYS, keys)
+
+    def test_onboard_asks_release_questions_after_tools(self):
+        step = SKILL.read_text(encoding="utf-8").split("### 3.")[1].split("### 4.")[0]
+        self.assertLess(step.index("[tools]"), step.index("[release]"))
+        for key in onboard.RELEASE_KEYS:
+            self.assertIn("`%s`" % key, step)
+        self.assertRegex(step, r"`none` for `version_gates` without asking")
+
+    def test_release_rule_covers_missing_table_and_empty_value(self):
+        config = (ROOT / "skills/shared/project-config.md").read_text(encoding="utf-8")
+        rule = config.split("## Release", 1)[1].split("\n## ", 1)[0]
+        for key in onboard.RELEASE_KEYS:
+            self.assertIn("`[release].%s`" % key, rule)
+        self.assertIn("missing `[release]` table", rule)
+        self.assertIn("empty value", rule)
+        self.assertIn("docs/VERSIONING.md", rule)
+        self.assertIn("{tag}", rule)
+        self.assertIn("{version}", rule)
+
+    def test_version_management_points_to_prepare_release(self):
+        config = (ROOT / "skills/shared/project-config.md").read_text(encoding="utf-8")
+        section = config.split("## Version management", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("/prepare-release", section)
+        self.assertNotRegex(section, r"(?i)bump version name manually")
+
     @template_only
     def test_analytics_catalogue_names_its_key(self):
         # Adopters own docs/ANALYTICS_EVENTS.md (their event catalogue), so only the shipped template is checked.
@@ -345,6 +373,7 @@ def write_config(root, empty=()):
     lines = ['[providers]', 'pm = "github"', 'vcs = "github"', "", "[project]"]
     lines += ['%s = %s' % (k, json.dumps(v)) for k, v in sorted(project.items())]
     lines += ["", "[tools]"] + ['%s = %s' % (k, json.dumps(v)) for k, v in tools.items()]
+    lines += ["", "[release]"] + ['%s = "none"' % k for k in onboard.RELEASE_KEYS]
     (root / "skill_router.toml").write_text("\n".join(lines) + "\n")
 
 
