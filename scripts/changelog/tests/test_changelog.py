@@ -141,6 +141,13 @@ class RealFilesTest(unittest.TestCase):
     def test_project_changelog_passes(self):
         self.assertEqual([], changelog.lint((ROOT / "docs" / "CHANGELOG.md").read_text(encoding="utf-8")))
 
+    def test_footer_examples_are_not_literal_headings(self):
+        # /ship must never take an example inside the footer comment for the real ## [Unreleased] heading.
+        text = (ROOT / "docs" / "CHANGELOG.md").read_text(encoding="utf-8")
+        hidden = [raw for raw, shown in zip(text.splitlines(), changelog._blank_comments(text)) if raw != shown]
+        self.assertTrue(hidden)
+        self.assertEqual([], [ln for ln in hidden if ln.startswith(("#", "- "))])
+
     def test_emptied_template_changelog_passes(self):
         text = (ROOT / "docs" / "CHANGELOG.md").read_text(encoding="utf-8")
         emptied = onboard._empty_changelog(text)

@@ -517,6 +517,10 @@ class ShipChangelogTest(unittest.TestCase):
         self.assertNotRegex(text, r"(?im)^#+ .*bump the version")
         self.assertNotRegex(text, r"(?m)^## \[X\.Y\.Z\]")  # no numbered heading template
 
+    def test_ship_never_writes_inside_the_footer_comment(self):
+        step = (self.SHIP / "SKILL.md").read_text(encoding="utf-8").split("### 2.")[1].split("### 3.")[0]
+        self.assertIn("outside any HTML comment", step)
+
     def test_tag_table_lists_every_tag(self):
         table = (self.SHIP / "resources" / "changelog-tags.md").read_text(encoding="utf-8")
         for tag in changelog.TAGS:

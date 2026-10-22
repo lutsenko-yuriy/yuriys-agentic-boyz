@@ -29,7 +29,7 @@ Move each issue linked to the PR/MR to **Done** (or the equivalent closed state)
 
 ### 2. Add a CHANGELOG line
 
-Append one line after the last `- ` line of the `## [Unreleased]` section of `docs/CHANGELOG.md`. If that heading is absent, create it right after the intro's first `---` rule. The grammar and tags are in `skills/manage/ship/resources/changelog-tags.md`:
+Append one line after the last `- ` line of the `## [Unreleased]` section of `docs/CHANGELOG.md`: the real heading at the start of a line, outside any HTML comment. The indented `## [Unreleased]` in the footer comment is only a format example; never write there. If the real heading is absent, create it right after the intro's first `---` rule. The grammar and tags are in `skills/manage/ship/resources/changelog-tags.md`:
 
 ```markdown
 ## [Unreleased]
