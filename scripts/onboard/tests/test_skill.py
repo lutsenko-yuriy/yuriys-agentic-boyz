@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.changelog import changelog
 from scripts.onboard import bash_policy, gate, onboard
 from scripts.onboard.tests import template_only
 
@@ -495,6 +496,31 @@ class RegistrationTest(unittest.TestCase):
         calibrate_row = next(ln for ln in rows if "skills/configure/calibrate/SKILL.md" in ln)
         self.assertIn("re-map", calibrate_row.lower())
         self.assertIn("/onboard", calibrate_row)
+
+
+class ShipChangelogTest(unittest.TestCase):
+    SHIP = ROOT / "skills" / "manage" / "ship"
+
+    def ship_text(self):
+        return text_of([self.SHIP / "SKILL.md"] + sorted((self.SHIP / "resources").glob("*.md")))
+
+    def test_named_changelog_subcommands_exist(self):
+        named = set(re.findall(r"changelog\.py (\w+)", self.ship_text()))
+        self.assertIn("lint", named)
+        self.assertLessEqual(named, set(changelog.SUBCOMMANDS))
+
+    def test_ship_writes_unreleased_and_never_bumps(self):
+        text = (self.SHIP / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("## [Unreleased]", text)
+        self.assertNotRegex(text, r"(?im)^#+ .*bump the version")
+        self.assertNotRegex(text, r"(?m)^## \[X\.Y\.Z\]")  # no numbered heading template
+
+    def test_tag_table_lists_every_tag(self):
+        table = (self.SHIP / "resources" / "changelog-tags.md").read_text(encoding="utf-8")
+        for tag in changelog.TAGS:
+            self.assertIn("`[%s]`" % tag, table)
+        for mark in changelog.MARKS:
+            self.assertIn(mark, table)
 
 
 if __name__ == "__main__":

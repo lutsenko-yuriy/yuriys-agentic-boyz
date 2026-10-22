@@ -3,7 +3,7 @@ name: ship
 effort: RAPID
 reasoning: TACTICAL
 output_style: CONCISE
-description: Post-merge housekeeping after a PR/MR is approved. Closes the linked PM issues, adds a CHANGELOG entry, regenerates BACKLOG.md, bumps the version, proposes PRODUCT_SPEC.md and GLOSSARY.md updates for approval, commits everything onto the feature branch, pushes, and merges. Invoke when the user approves a PR/MR, before merging.
+description: Post-merge housekeeping after a PR/MR is approved. Closes the linked PM issues, adds a marked CHANGELOG line under [Unreleased], regenerates BACKLOG.md, proposes PRODUCT_SPEC.md and GLOSSARY.md updates for approval, commits everything onto the feature branch, pushes, and merges. Invoke when the user approves a PR/MR, before merging.
 ---
 
 The project management tool is **{{PM_TOOL}}**. The issue identifier prefix is **{{ISSUE_PREFIX}}**.
@@ -27,18 +27,20 @@ Move each issue linked to the PR/MR to **Done** (or the equivalent closed state)
 | GitHub Issues | `gh issue close {number}` |
 | GitLab | `glab issue close {number}` |
 
-### 2. Add a CHANGELOG entry
+### 2. Add a CHANGELOG line
 
-Open `docs/CHANGELOG.md` and prepend a new entry at the top:
+Append one line to the end of the `## [Unreleased]` section of `docs/CHANGELOG.md`. If that heading is absent, create it right after the intro's first `---` rule. The grammar and tags are in `skills/manage/ship/resources/changelog-tags.md`:
 
 ```markdown
-## [X.Y.Z] — YYYY-MM-DD
-
-### Added / Changed / Fixed
-- {{ISSUE_PREFIX}}-XX: <one-line summary of what changed>
+## [Unreleased]
+- {{ISSUE_PREFIX}}-XX: <one-line summary of what changed> (PR #N) [user] MINOR flags: name1, name2
 ```
 
-Follow semantic versioning (`docs/VERSIONING.md`): patch for bug fixes, minor for new features, major for breaking changes.
+- **Tag:** the classification tag(s) for this PR/MR.
+- **Mark** (`[user]`/`[app]` lines only): propose `MAJOR`, `MINOR` or `PATCH` from the issue and the diff, per `docs/VERSIONING.md` (breaking change, new feature, fix). Ask the user to confirm or change it before writing.
+- **Flags:** only when `skill_router.toml` `[tools].feature_flags` is not `none` and the feature has flags: the names of the flags that switch it on and off, after the mark.
+
+Never write a numbered `## [X.Y.Z]` heading or bump the version file: `/prepare-release` does both when a release is cut.
 
 ### 3. Regenerate BACKLOG.md
 
@@ -49,17 +51,9 @@ Open `docs/BACKLOG.md` and make two edits:
 
 Do not rewrite the rest of the file — the milestone sections are the source of truth from the PM tool.
 
-### 4. Bump the version
+### 4. Update PRODUCT_SPEC.md and GLOSSARY.md
 
-Find the project's version file (check `CLAUDE.md` → "Common Commands" for the stack-specific location, e.g. `pubspec.yaml`, `package.json`, `build.gradle`). Update the version string to match the new `[X.Y.Z]` entry added in step 2.
-
-**No version file exists yet** (common for a project with no build tool chosen, or a script/CLI project that doesn't version itself): skip this step entirely — do not fail or block on it. Note in the step 7 report that there was no version file to bump, so this doesn't silently look skipped.
-
-Do not touch the build number — CI manages it.
-
-### 5. Update PRODUCT_SPEC.md and GLOSSARY.md
-
-Skip this step if the new CHANGELOG entry (added in step 2) contains only `[meta]`, `[ci]`, or `[app]` tags — those PRs introduce no observable user-facing behaviour change. For all other PRs (`[user]` entries), proceed as follows:
+Skip this step if the new CHANGELOG line (added in step 2) has no `[user]` tag — those PRs introduce no observable user-facing behaviour change. For all other PRs (`[user]` entries), proceed as follows:
 
 1. Fetch the PR/MR diff (GitHub: `gh pr diff <number>` · GitLab: `glab mr diff <iid>`).
 2. Re-read the ticket description (already fetched in step 1).
@@ -69,17 +63,23 @@ Skip this step if the new CHANGELOG entry (added in step 2) contains only `[meta
 4. Present the proposed changes to the user **before writing anything**. Show the exact text to be added or replaced. Wait for explicit approval or revision instructions.
 5. Apply only the approved changes.
 
-If no changes are needed for a file, skip it. If the user declines all changes, skip to step 6.
+If no changes are needed for a file, skip it. If the user declines all changes, skip to step 5.
 
-### 6. Commit, push, and merge
+### 5. Commit, push, and merge
+
+Lint the CHANGELOG and fix any finding on the new line before committing:
+
+```bash
+python3 scripts/changelog/changelog.py lint docs/CHANGELOG.md
+```
 
 Stage only the files changed above and commit onto the feature branch:
 
 ```bash
-git add docs/CHANGELOG.md docs/BACKLOG.md <version-file>
-# add only if modified in step 5:
+git add docs/CHANGELOG.md docs/BACKLOG.md
+# add only if modified in step 4:
 git add docs/PRODUCT_SPEC.md docs/GLOSSARY.md
-git commit -m "chore: release {{ISSUE_PREFIX}}-XX, bump version to X.Y.Z"
+git commit -m "chore: CHANGELOG for {{ISSUE_PREFIX}}-XX"
 git push
 ```
 
@@ -91,8 +91,8 @@ Then merge the PR/MR on your Git host:
 | GitLab | `glab mr merge {iid} --squash --remove-source-branch` |
 | Bitbucket | merge via Bitbucket REST API or UI |
 
-### 7. Report back
+### 6. Report back
 
-Confirm: issue(s) closed, changelog updated, version bumped, docs updated (list which files changed), PR/MR merged. Include the new version number and the PR/MR URL.
+Confirm: issue(s) closed, CHANGELOG line added (quote it), docs updated (list which files changed), PR/MR merged. Include the PR/MR URL.
 
 After reporting, propose: *"Want to run `/debrief {{ISSUE_PREFIX}}-XX` to capture what you learned from this ticket?"* (optional — do not block on it)

@@ -7,7 +7,7 @@ Usage:
     python3 scripts/changelog/changelog.py propose <path> --current X.Y.Z      # next version from the highest mark
 
 Line grammar (skills/manage/ship/resources/changelog-tags.md):
-    - <ID>: <summary> (PR #N) [tag]... [MAJOR|MINOR|PATCH][ flags: name1, name2]
+    - <ID>: <summary> (PR #N) [tag]... <MAJOR|MINOR|PATCH> flags: <name>, <name>   (mark and flags as the rules require)
 
 Only `## [Unreleased]` lines are linted; numbered `## [X.Y.Z]` sections are checked for their heading format only.
 Prints JSON on stdout. Exit codes: 0 ok, 1 findings or refusal.
@@ -26,6 +26,7 @@ CLASSIFICATION_TAGS = ("user", "app", "test", "meta", "ci", "wip")
 TAGS = CLASSIFICATION_TAGS + ("non-user",)
 APP_TAGS = ("user", "app")
 MARKS = ("PATCH", "MINOR", "MAJOR")  # ascending precedence
+SUBCOMMANDS = ("lint", "unreleased", "propose")
 
 UNRELEASED = "## [Unreleased]"
 NUMBERED_RE = re.compile(r"^## \[(\d+\.\d+\.\d+)\] — \d{4}-\d{2}-\d{2}(?: \(.*\))?$")
@@ -145,7 +146,7 @@ def propose(text: str, current: str) -> str:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
-    for name in ("lint", "unreleased", "propose"):
+    for name in SUBCOMMANDS:
         p = sub.add_parser(name)
         p.add_argument("path")
         if name == "propose":
