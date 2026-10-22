@@ -13,7 +13,8 @@ from scripts.onboard import onboard
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "changelog" / "changelog.py"
 
-INTRO = "# Changelog\n\nIntro.\n\n---\n\n"
+UNMARKED_INTRO = "# Changelog\n\nIntro.\n\n---\n\n"
+INTRO = "# Changelog\n\nIntro.\n\n%s\n\n---\n\n" % changelog.MARKER
 FOOTER = "\n---\n\n<!-- ## [Unreleased]\n- not linted [bogus] -->\n"
 
 
@@ -97,13 +98,39 @@ class SectionTest(unittest.TestCase):
         self.assertEqual([], errors(INTRO + "## [1.0.0] — 2026-01-02\n- anything\n"))
 
 
+class FormatMarkerTest(unittest.TestCase):
+    LEGACY = UNMARKED_INTRO + "## [Unreleased]\n- [user] old style\n\n## [0.1.0] - 2026-03-??\n- x\n"
+
+    def test_marker_text(self):
+        self.assertEqual("<!-- changelog-format: yab-1 -->", changelog.MARKER)
+
+    def test_unmarked_changelog_is_not_linted(self):
+        self.assertIsNone(changelog.format_of(self.LEGACY))
+        self.assertEqual([], errors(self.LEGACY))
+
+    def test_marker_opts_in(self):
+        marked = self.LEGACY.replace("Intro.\n", "Intro.\n\n%s\n" % changelog.MARKER)
+        self.assertEqual("yab-1", changelog.format_of(marked))
+        self.assertTrue(errors(marked))
+
+    def test_marker_must_be_its_own_line(self):
+        self.assertIsNone(changelog.format_of("<!-- note\n%s inline -->\n" % changelog.MARKER))
+
+    def test_unknown_format_is_a_finding(self):
+        found = changelog.lint(INTRO.replace("yab-1", "yab-9"))
+        self.assertEqual(1, len(found))
+        self.assertIn("yab-9", found[0]["error"])
+
+
 class RealFilesTest(unittest.TestCase):
     def test_project_changelog_passes(self):
         self.assertEqual([], changelog.lint((ROOT / "docs" / "CHANGELOG.md").read_text(encoding="utf-8")))
 
     def test_emptied_template_changelog_passes(self):
         text = (ROOT / "docs" / "CHANGELOG.md").read_text(encoding="utf-8")
-        self.assertEqual([], changelog.lint(onboard._empty_changelog(text)))
+        emptied = onboard._empty_changelog(text)
+        self.assertEqual(changelog.FORMAT, changelog.format_of(emptied))  # new projects start opted in
+        self.assertEqual([], changelog.lint(emptied))
 
 
 class UnreleasedTest(unittest.TestCase):
@@ -186,6 +213,29 @@ class CliTest(unittest.TestCase):
         code, out = self.run_main("propose", self.write(doc("- #1: x [user]")), "--current", "1.0.0")
         self.assertEqual(1, code)
         self.assertIn("error", out)
+
+    def test_unmarked_lint_prints_a_one_line_notice(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = changelog.main(["lint", self.write(FormatMarkerTest.LEGACY)])
+        self.assertEqual(0, code)
+        self.assertEqual(1, len(out.getvalue().strip().splitlines()))
+        self.assertIn(changelog.MARKER, json.loads(out.getvalue())["notice"])
+
+    def test_unmarked_unreleased_and_propose_carry_the_notice(self):
+        path = self.write(UNMARKED_INTRO + "## [Unreleased]\n- #1: x [user] PATCH\n")
+        code, out = self.run_main("unreleased", path)
+        self.assertEqual(0, code)
+        self.assertIn(changelog.MARKER, out["notice"])
+        code, out = self.run_main("propose", path, "--current", "1.0.0")
+        self.assertEqual((0, "1.0.1"), (code, out["version"]))
+        self.assertIn("notice", out)
+        code, out = self.run_main("unreleased", self.write(FormatMarkerTest.LEGACY))
+        self.assertEqual(1, code)
+        self.assertIn("notice", out)
+
+    def test_marked_output_has_no_notice(self):
+        self.assertNotIn("notice", self.run_main("unreleased", self.write(doc("- #1: x [meta]")))[1])
 
     def test_missing_file(self):
         code, out = self.run_main("lint", "/nonexistent/CHANGELOG.md")

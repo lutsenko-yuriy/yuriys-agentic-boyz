@@ -438,6 +438,7 @@ class TemplateFlowTest(unittest.TestCase):
             self.assertTrue(onboard.apply(root)["changelog_reset"])
             text = (root / "docs/CHANGELOG.md").read_text()
             self.assertNotIn("## [Unreleased]", onboard._strip_comments(text))  # the footer comment shows the format
+            self.assertIn(changelog.MARKER, text.splitlines())  # a new project's CHANGELOG is linted from the start
             errors = onboard.check(root)["errors"]
             self.assertTrue(any(e.startswith("README.md is still the YAB template README") for e in errors))
 

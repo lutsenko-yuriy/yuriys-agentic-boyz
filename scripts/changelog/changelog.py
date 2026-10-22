@@ -9,6 +9,8 @@ Usage:
 Line grammar (skills/manage/ship/resources/changelog-tags.md):
     - <ID>: <summary> (PR #N) [tag]... <MAJOR|MINOR|PATCH> flags: <name>, <name>   (mark and flags as the rules require)
 
+Only a CHANGELOG with the format marker line `<!-- changelog-format: yab-1 -->` is linted; without it `lint` prints a
+notice and exits 0, and `unreleased`/`propose` still parse but add the notice to their output.
 Only `## [Unreleased]` lines are linted; numbered `## [X.Y.Z]` sections are checked for their heading format only.
 Prints JSON on stdout. Exit codes: 0 ok, 1 findings or refusal.
 """
@@ -28,6 +30,11 @@ APP_TAGS = ("user", "app")
 MARKS = ("PATCH", "MINOR", "MAJOR")  # ascending precedence
 SUBCOMMANDS = ("lint", "unreleased", "propose")
 
+FORMAT = "yab-1"
+MARKER = "<!-- changelog-format: %s -->" % FORMAT
+MARKER_RE = re.compile(r"^<!-- changelog-format: (\S+) -->[ \t]*$", re.MULTILINE)
+NOTICE = "no %s line: not linted; add it above the first '---' to opt in (docs/VERSIONING.md)" % MARKER
+
 UNRELEASED = "## [Unreleased]"
 NUMBERED_RE = re.compile(r"^## \[(\d+\.\d+\.\d+)\] — \d{4}-\d{2}-\d{2}(?: \(.*\))?$")
 VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
@@ -46,6 +53,12 @@ class ChangelogError(Exception):
 def _blank_comments(text: str) -> List[str]:
     """Lines with HTML comments blanked, so line numbers still match the file."""
     return COMMENT_RE.sub(lambda m: re.sub(r"[^\n]", "", m.group(0)), text).splitlines()
+
+
+def format_of(text: str) -> Optional[str]:
+    """The format named by the marker line, or None for a CHANGELOG that has not opted in."""
+    m = MARKER_RE.search(text)
+    return m.group(1) if m else None
 
 
 def parse_entry(line: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -115,6 +128,13 @@ def _scan(text: str) -> Tuple[List[Dict[str, Any]], List[Tuple[int, str, Dict[st
 
 
 def lint(text: str) -> List[Dict[str, Any]]:
+    """Findings for a CHANGELOG with the format marker; none for one without it."""
+    m = MARKER_RE.search(text)
+    if not m:
+        return []
+    if m.group(1) != FORMAT:
+        line = text.count("\n", 0, m.start()) + 1
+        return [{"line": line, "error": "unknown changelog format %r; supported: %s" % (m.group(1), FORMAT)}]
     return _scan(text)[0]
 
 
@@ -157,7 +177,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     except (OSError, UnicodeDecodeError) as e:
         print(json.dumps({"error": str(e)}))
         return 1
+    notice = {} if format_of(text) else {"notice": NOTICE}
     if args.cmd == "lint":
+        if notice:
+            print(json.dumps(dict(findings=[], **notice), ensure_ascii=False))
+            return 0
         findings = lint(text)
         print(json.dumps({"findings": findings}, indent=2, ensure_ascii=False))
         return 1 if findings else 0
@@ -167,9 +191,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         else:
             result = {"version": propose(text, args.current)}
     except ChangelogError as e:
-        print(json.dumps({"error": str(e), "findings": e.findings} if e.findings else {"error": str(e)}, indent=2))
+        error = {"error": str(e), "findings": e.findings} if e.findings else {"error": str(e)}
+        print(json.dumps(dict(error, **notice), indent=2, ensure_ascii=False))
         return 1
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    print(json.dumps(dict(result, **notice), indent=2, ensure_ascii=False))
     return 0
 
 

@@ -35,5 +35,5 @@ Rules:
 - `[non-user]` is supplementary only — it does **not** satisfy the classification requirement on its own.
 - `[user]` summaries must be readable by end users with no technical background: no class names, file paths, internal terms, or jargon.
 - Numbered `## [X.Y.Z] — YYYY-MM-DD` sections are written by `/prepare-release`, never by hand or by `/ship`; only their heading format is linted.
-- Check the file with `python3 scripts/changelog/changelog.py lint docs/CHANGELOG.md` (CI runs it too).
+- Check the file with `python3 scripts/changelog/changelog.py lint docs/CHANGELOG.md` (CI runs it too). It lints only a CHANGELOG containing the line `<!-- changelog-format: yab-1 -->`; without it, it prints a notice and passes (`docs/VERSIONING.md`, Release flow).
 - The tag list may grow; each new tag must declare whether `/prepare-release` selects it and whether it appears in release notes, and be added to `scripts/changelog/changelog.py`.

@@ -73,6 +73,8 @@ Lint the CHANGELOG and fix any finding on the new line before committing:
 python3 scripts/changelog/changelog.py lint docs/CHANGELOG.md
 ```
 
+If the output has a `notice` (the CHANGELOG has no `<!-- changelog-format: yab-1 -->` line, so it was not linted), tell the user and point to the Release flow in `docs/VERSIONING.md` for opting in; do not add the marker without their go.
+
 Stage only the files changed above and commit onto the feature branch:
 
 ```bash

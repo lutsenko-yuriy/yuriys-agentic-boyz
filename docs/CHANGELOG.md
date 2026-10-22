@@ -2,6 +2,8 @@
 
 A record of all versioned releases. For planned work and known issues, see @docs/BACKLOG.md.
 
+<!-- changelog-format: yab-1 -->
+
 ---
 
 ## [Unreleased]
