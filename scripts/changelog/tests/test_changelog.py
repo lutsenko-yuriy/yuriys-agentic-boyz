@@ -9,6 +9,7 @@ from pathlib import Path
 
 from scripts.changelog import changelog
 from scripts.onboard import onboard
+from scripts.onboard.tests import template_only
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "changelog" / "changelog.py"
@@ -135,6 +136,7 @@ class FormatMarkerTest(unittest.TestCase):
         self.assertIn("yab-9", found[0]["error"])
 
 
+@template_only  # an onboarded project's CHANGELOG is its own, linted by the CI step instead
 class RealFilesTest(unittest.TestCase):
     def test_project_changelog_passes(self):
         self.assertEqual([], changelog.lint((ROOT / "docs" / "CHANGELOG.md").read_text(encoding="utf-8")))
@@ -256,7 +258,7 @@ class CliTest(unittest.TestCase):
         self.assertIn("error", out)
 
     def test_runs_as_a_script(self):
-        proc = subprocess.run([sys.executable, "-W", "error", str(SCRIPT), "lint", str(ROOT / "docs" / "CHANGELOG.md")],
+        proc = subprocess.run([sys.executable, "-W", "error", str(SCRIPT), "lint", self.write(doc("- #1: x [meta]"))],
                               capture_output=True, text=True)
         self.assertEqual(0, proc.returncode, proc.stdout + proc.stderr)
 
