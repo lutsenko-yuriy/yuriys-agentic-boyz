@@ -98,6 +98,12 @@ class SectionTest(unittest.TestCase):
         self.assertTrue(errors(INTRO + released + "## [Unreleased]\n- #1: x [meta]\n"))
         self.assertTrue(errors(doc("- #1: x [meta]") + "## [Unreleased]\n"))
 
+    def test_unreleased_heading_variants(self):
+        for heading in ["## [unreleased]", "## [Unreleased] — pending", "## Unreleased", "## UNRELEASED", "##  [Unreleased]"]:
+            found = errors(INTRO + heading + "\n- #1: x [meta]\n")
+            self.assertEqual(1, len(found), (heading, found))
+            self.assertIn("must be exactly '## [Unreleased]'", found[0], heading)
+
     def test_html_comments_are_ignored(self):
         self.assertEqual([], errors(doc("<!-- a note\n[bogus] -->", "- #1: x [meta]")))
 

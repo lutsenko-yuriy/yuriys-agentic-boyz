@@ -36,6 +36,7 @@ MARKER_RE = re.compile(r"^<!-- changelog-format: (\S+) -->[ \t]*$", re.MULTILINE
 NOTICE = "no %s line: not linted; add it above the first '---' to opt in (docs/VERSIONING.md)" % MARKER
 
 UNRELEASED = "## [Unreleased]"
+UNRELEASED_LIKE_RE = re.compile(r"^##\s+\[?\s*unreleased\b", re.IGNORECASE)
 # Grandfathered: X.Y or X.Y.Z with optional pre-release/build, `-`/`–`/`—`, `??` date parts, or no date.
 NUMBERED_RE = re.compile(r"^## \[\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\]"
                          r"(?: [-–—] \d{4}-(?:\d{2}|\?\?)-(?:\d{2}|\?\?)(?: \(.*\))?)?$")
@@ -111,6 +112,8 @@ def _scan(text: str) -> Tuple[List[Dict[str, Any]], List[Tuple[int, str, Dict[st
                 if seen_unreleased or seen_numbered:
                     findings.append({"line": n, "error": "only one ## [Unreleased], above every release"})
                 seen_unreleased, section = True, "unreleased"
+            elif UNRELEASED_LIKE_RE.match(line):
+                findings.append({"line": n, "error": "Unreleased heading must be exactly '%s'" % UNRELEASED})
             elif line.startswith("## ["):
                 seen_numbered = True
                 if not NUMBERED_RE.match(line):
