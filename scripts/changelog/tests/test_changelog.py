@@ -291,6 +291,15 @@ class CliTest(unittest.TestCase):
         self.assertEqual(1, code)
         self.assertIn("notice", out)
 
+    def test_unknown_format_refuses_unreleased_and_propose(self):
+        path = self.write(doc("- #1: x [user] PATCH").replace("yab-1", "yab-9"))
+        lint_error = changelog.lint(Path(path).read_text(encoding="utf-8"))[0]["error"]
+        for argv in (["unreleased", path], ["propose", path, "--current", "1.0.0"]):
+            code, out = self.run_main(*argv)
+            self.assertEqual(1, code, argv)
+            self.assertEqual(lint_error, out["error"], argv)
+            self.assertNotIn("notice", out, argv)
+
     def test_marked_output_has_no_notice(self):
         self.assertNotIn("notice", self.run_main("unreleased", self.write(doc("- #1: x [meta]")))[1])
 

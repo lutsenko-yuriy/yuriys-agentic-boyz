@@ -11,7 +11,7 @@ Line grammar (skills/manage/ship/resources/changelog-tags.md):
 
 Only a CHANGELOG with the format marker line `<!-- changelog-format: yab-1 -->` above the first `---` is linted (a second
 marker anywhere is a finding); without it `lint` prints a notice and exits 0, and `unreleased`/`propose` still parse
-but add the notice to their output.
+but add the notice to their output; an unknown format is refused by all three.
 Only `## [Unreleased]` lines are linted; numbered `## [X.Y.Z]` sections are checked for their heading format only.
 Prints JSON on stdout. Exit codes: 0 ok, 1 findings or refusal.
 """
@@ -73,6 +73,10 @@ def _markers(text: str) -> List[Tuple[int, str, bool]]:
         if m:
             found.append((n, m.group(1), intro))
     return found
+
+
+def _unknown_format(fmt: str) -> str:
+    return "unknown changelog format %r; supported: %s" % (fmt, FORMAT)
 
 
 def format_of(text: str) -> Optional[str]:
@@ -159,12 +163,15 @@ def lint(text: str) -> List[Dict[str, Any]]:
     findings = [{"line": n, "error": "second changelog-format marker; keep only the one above the first '---'"}
                 for n, _, _ in markers if n != line]
     if fmt != FORMAT:
-        return [{"line": line, "error": "unknown changelog format %r; supported: %s" % (fmt, FORMAT)}] + findings
+        return [{"line": line, "error": _unknown_format(fmt)}] + findings
     return sorted(findings + _scan(text)[0], key=lambda f: f["line"])
 
 
 def unreleased(text: str) -> Dict[str, Any]:
     """App-changing [Unreleased] lines and a count of the rest. A missing mark is reported as None, not refused."""
+    fmt = format_of(text)
+    if fmt not in (None, FORMAT):
+        raise ChangelogError(_unknown_format(fmt))
     findings, entries = _scan(text)
     parsed = {n for n, _, _ in entries}
     if any(f["line"] not in parsed for f in findings):
