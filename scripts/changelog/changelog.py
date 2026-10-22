@@ -4,7 +4,7 @@
 Usage:
     python3 scripts/changelog/changelog.py lint <path>                         # grammar findings
     python3 scripts/changelog/changelog.py unreleased <path>                   # app-changing [Unreleased] lines
-    python3 scripts/changelog/changelog.py propose <path> --current X.Y.Z      # next version from the highest mark
+    python3 scripts/changelog/changelog.py propose <path> --current X.Y.Z [--keep N ...]  # from the highest mark
     python3 scripts/changelog/changelog.py latest <path>                       # latest released X.Y.Z, or null
     python3 scripts/changelog/changelog.py cut <path> X.Y.Z [--keep N ...] [--notes-file F] [--date YYYY-MM-DD]
         # release commit content: every [Unreleased] line except the kept app lines (file line numbers, as
@@ -30,7 +30,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 CLASSIFICATION_TAGS = ("user", "app", "test", "meta", "ci", "wip")
 TAGS = CLASSIFICATION_TAGS + ("non-user",)
@@ -193,17 +193,27 @@ def unreleased(text: str) -> Dict[str, Any]:
     return {"app": app, "non_app": len(entries) - len(app)}
 
 
-def propose(text: str, current: str) -> str:
+def _selected(app: List[Dict[str, Any]], keep: Sequence[int]) -> List[Dict[str, Any]]:
+    """The app lines not kept back; refuses stray keep numbers, an empty selection and unmarked selected lines."""
+    stray = sorted(set(keep) - {e["line"] for e in app})
+    if stray:
+        raise ChangelogError("line(s) %s not an app-changing [Unreleased] line" % ", ".join(map(str, stray)))
+    selected = [e for e in app if e["line"] not in keep]
+    if not selected:
+        raise ChangelogError("no [user]/[app] lines selected in [Unreleased]: nothing to release")
+    missing = [e["line"] for e in selected if e["mark"] is None]
+    if missing:
+        raise ChangelogError("missing semver mark on selected line(s) %s" % ", ".join(map(str, missing)))
+    return selected
+
+
+def propose(text: str, current: str, keep: Sequence[int] = ()) -> str:
+    """The next version from the highest mark among the app lines not kept back."""
     m = VERSION_RE.match(current)
     if not m:
         raise ChangelogError("current version %r is not X.Y.Z" % current)
-    app = unreleased(text)["app"]
-    if not app:
-        raise ChangelogError("no [user]/[app] lines in [Unreleased]: nothing to release")
-    missing = [e["line"] for e in app if e["mark"] is None]
-    if missing:
-        raise ChangelogError("missing semver mark on line(s) %s" % ", ".join(map(str, missing)))
-    top = max(MARKS.index(e["mark"]) for e in app)
+    selected = _selected(unreleased(text)["app"], keep)
+    top = max(MARKS.index(e["mark"]) for e in selected)
     major, minor, patch = (int(g) for g in m.groups())
     return ["%d.%d.%d" % (major, minor, patch + 1), "%d.%d.0" % (major, minor + 1), "%d.0.0" % (major + 1)][top]
 
@@ -252,16 +262,7 @@ def cut(text: str, version: str, keep: List[int], notes_text: str, date: str) ->
         if e.findings:
             raise ChangelogError("CHANGELOG has lint findings; fix them first", e.findings)
         raise
-    app_lines = {e["line"]: e for e in app}
-    stray = sorted(set(keep) - set(app_lines))
-    if stray:
-        raise ChangelogError("line(s) %s not an app-changing [Unreleased] line" % ", ".join(map(str, stray)))
-    selected = [e for n, e in app_lines.items() if n not in keep]
-    if not selected:
-        raise ChangelogError("no [user]/[app] lines selected: nothing to release")
-    missing = [e["line"] for e in selected if e["mark"] is None]
-    if missing:
-        raise ChangelogError("missing semver mark on selected line(s) %s" % ", ".join(map(str, missing)))
+    _selected(app, keep)
 
     raw = text.splitlines()
     blanked = _blank_comments(text)
@@ -309,8 +310,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             p.add_argument("--current", required=True)
         if name in ("cut", "notes"):
             p.add_argument("version")
-        if name == "cut":
+        if name in ("propose", "cut"):
             p.add_argument("--keep", type=int, nargs="*", default=[])
+        if name == "cut":
             p.add_argument("--notes-file")
             p.add_argument("--date", default=datetime.date.today().isoformat())
     args = parser.parse_args(argv)
@@ -331,7 +333,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.cmd == "unreleased":
             result = unreleased(text)
         elif args.cmd == "propose":
-            result = {"version": propose(text, args.current)}
+            result = {"version": propose(text, args.current, args.keep)}
         elif args.cmd == "latest":
             result = {"version": latest(text)}
         elif args.cmd == "notes":

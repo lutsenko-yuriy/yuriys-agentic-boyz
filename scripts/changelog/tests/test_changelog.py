@@ -234,6 +234,15 @@ class ProposeTest(unittest.TestCase):
         with self.assertRaises(changelog.ChangelogError):
             changelog.propose(doc("- #1: x [meta]"), "1.0.0")
 
+    def test_kept_lines_do_not_count(self):
+        text = doc("- #1: x [user] MAJOR", "- #2: y [app] PATCH", "- #3: z [app]")
+        keep = [line_of(text, "#1:"), line_of(text, "#3:")]
+        self.assertEqual("1.0.1", changelog.propose(text, "1.0.0", keep))
+        with self.assertRaises(changelog.ChangelogError):
+            changelog.propose(text, "1.0.0", keep + [line_of(text, "#2:")])
+        with self.assertRaises(changelog.ChangelogError):
+            changelog.propose(text, "1.0.0", [line_of(text, "#1:")])  # #3 is selected and unmarked
+
     def test_bad_current_version_refuses(self):
         with self.assertRaises(changelog.ChangelogError):
             changelog.propose(doc("- #1: x [user] MINOR"), "v1.0")
@@ -396,6 +405,11 @@ class CliTest(unittest.TestCase):
         code, out = self.run_main("notes", self.write(text), "9.9.9")
         self.assertEqual(1, code)
         self.assertIn("error", out)
+
+    def test_propose_with_keep(self):
+        text = doc("- #1: x [user] MAJOR", "- #2: y [app] PATCH")
+        out = self.run_main("propose", self.write(text), "--current", "1.0.0", "--keep", str(line_of(text, "#1:")))
+        self.assertEqual((0, {"version": "1.0.1"}), out)
 
     def test_unmarked_lint_prints_a_one_line_notice(self):
         out = io.StringIO()
