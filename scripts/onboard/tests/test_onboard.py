@@ -286,6 +286,12 @@ class CheckTests(unittest.TestCase):
         self.assertIn("no [tools] table", self.msgs(r, "warnings"))
         self.assertNotIn("[tools]", self.msgs(self.check(), "warnings"))
 
+    def test_unknown_tools_keys_are_warned(self):
+        r = self.check({"skill_router.toml": GOOD_TOML + 'feature_flag = "Statsig"\n'})
+        self.assertTrue(r["ok"], r)
+        self.assertIn("skill_router.toml: unknown tools.feature_flag ignored", self.msgs(r, "warnings"))
+        self.assertNotIn("unknown tools", self.msgs(self.check(), "warnings"))
+
     def test_tools_values_validated(self):
         def with_logging(line):
             return GOOD_TOML.replace('logging = "none"\n', line)

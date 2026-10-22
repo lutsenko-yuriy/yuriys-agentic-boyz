@@ -199,6 +199,14 @@ class SubstitutionTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(json.loads(out)["warnings"], ["skill_router.toml: unknown project.keep_license ignored"])
 
+    def test_unknown_tools_keys_are_warned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            extra = '[tools]\nanalytics = "none"\nlogging = "none"\nfeature_flag = "Statsig"\n'
+            root = self.repo(tmp, toml_text("github", extra=extra, name="N"), {"a.md": ph("PROJECT_NAME")})
+            code, out, _ = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out)["warnings"], ["skill_router.toml: unknown tools.feature_flag ignored"])
+
     def test_empty_values_leave_placeholders_untouched(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.repo(tmp, toml_text("", name="  ", issue_prefix="HL"),

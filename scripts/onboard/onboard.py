@@ -370,6 +370,10 @@ def _tools(table: Optional[Dict[str, Any]]) -> Tuple[Optional[Dict[str, str]], L
     return tools, errors
 
 
+def _unknown_tools(table: Optional[Dict[str, Any]]) -> List[str]:
+    return ["skill_router.toml: unknown tools.%s ignored" % k for k in sorted(set(table or {}) - set(TOOL_KEYS))]
+
+
 def _check_config(root: Path, errors: List[str], warnings: List[str]) -> str:
     if not (root / "skill_router.toml").is_file():
         errors.append("skill_router.toml missing")
@@ -393,6 +397,7 @@ def _check_config(root: Path, errors: List[str], warnings: List[str]) -> str:
         errors.append("project.project_id must be a real id when providers.pm is linear, not 'none'")
     tools, tool_errors = _tools(table)
     errors.extend(tool_errors)
+    warnings.extend(_unknown_tools(table))
     if tools is None:
         warnings.append(TOOLS_LEGACY_WARNING)
     else:
@@ -562,6 +567,7 @@ def apply(root: Path) -> Dict[str, Any]:
     values = _values(project, pm, tools)
     unknown = set(project) - PROJECT_KEYS - LEGACY_PROJECT_KEYS
     warnings = ["skill_router.toml: unknown project.%s ignored" % k for k in sorted(unknown)]
+    warnings.extend(_unknown_tools(table))
     mcp = _plan_mcp(root, pm)
     sentinel = root / ".yab-template"
     sentinel_deleted = os.path.lexists(sentinel) and not sentinel.is_dir()
