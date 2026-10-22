@@ -347,10 +347,7 @@ def _pm(providers: Dict[str, Any]) -> Tuple[str, Optional[str]]:
 
 
 def _tools(table: Optional[Dict[str, Any]]) -> Tuple[Optional[Dict[str, str]], List[str]]:
-    """The normalised [tools] values ("" when unset; None without the table) and their errors; shared by check and apply.
-
-    Emptiness is not an error here: apply keeps the derived placeholder, and check reports it.
-    """
+    """Normalised [tools] values (None without the table) and errors; empty is left to check, so apply keeps the placeholder."""
     if table is None:
         return None, []
     tools: Dict[str, str] = {}
