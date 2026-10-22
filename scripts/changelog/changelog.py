@@ -32,7 +32,7 @@ SUBCOMMANDS = ("lint", "unreleased", "propose")
 
 FORMAT = "yab-1"
 MARKER = "<!-- changelog-format: %s -->" % FORMAT
-MARKER_RE = re.compile(r"^<!-- changelog-format: (\S+) -->[ \t]*$", re.MULTILINE)
+MARKER_RE = re.compile(r"^<!-- changelog-format: (\S+) -->$")
 NOTICE = "no %s line: not linted; add it above the first '---' to opt in (docs/VERSIONING.md)" % MARKER
 
 UNRELEASED = "## [Unreleased]"
@@ -58,10 +58,20 @@ def _blank_comments(text: str) -> List[str]:
     return COMMENT_RE.sub(lambda m: re.sub(r"[^\n]", "", m.group(0)), text).splitlines()
 
 
+def _markers(text: str) -> List[Tuple[int, str]]:
+    """[(line number, format)] for each marker line; a BOM, CRLF and surrounding whitespace are ignored."""
+    found = []
+    for n, raw in enumerate(text.lstrip("\ufeff").splitlines(), 1):
+        m = MARKER_RE.match(raw.strip())
+        if m:
+            found.append((n, m.group(1)))
+    return found
+
+
 def format_of(text: str) -> Optional[str]:
     """The format named by the marker line, or None for a CHANGELOG that has not opted in."""
-    m = MARKER_RE.search(text)
-    return m.group(1) if m else None
+    markers = _markers(text)
+    return markers[0][1] if markers else None
 
 
 def parse_entry(line: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -134,12 +144,12 @@ def _scan(text: str) -> Tuple[List[Dict[str, Any]], List[Tuple[int, str, Dict[st
 
 def lint(text: str) -> List[Dict[str, Any]]:
     """Findings for a CHANGELOG with the format marker; none for one without it."""
-    m = MARKER_RE.search(text)
-    if not m:
+    markers = _markers(text)
+    if not markers:
         return []
-    if m.group(1) != FORMAT:
-        line = text.count("\n", 0, m.start()) + 1
-        return [{"line": line, "error": "unknown changelog format %r; supported: %s" % (m.group(1), FORMAT)}]
+    line, fmt = markers[0]
+    if fmt != FORMAT:
+        return [{"line": line, "error": "unknown changelog format %r; supported: %s" % (fmt, FORMAT)}]
     return _scan(text)[0]
 
 

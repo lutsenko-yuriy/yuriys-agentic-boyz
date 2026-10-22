@@ -130,6 +130,21 @@ class FormatMarkerTest(unittest.TestCase):
     def test_marker_must_be_its_own_line(self):
         self.assertIsNone(changelog.format_of("<!-- note\n%s inline -->\n" % changelog.MARKER))
 
+    def test_marker_with_crlf_line_endings(self):
+        crlf = INTRO.replace("\n", "\r\n") + "## [Unreleased]\r\n- #1: no tag\r\n"
+        self.assertEqual("yab-1", changelog.format_of(crlf))
+        self.assertEqual(1, len(errors(crlf)))
+
+    def test_marker_after_a_bom(self):
+        bom = "\ufeff" + changelog.MARKER + "\n\n---\n\n## [Unreleased]\n- #1: no tag\n"
+        self.assertEqual("yab-1", changelog.format_of(bom))
+        self.assertEqual(1, len(errors(bom)))
+
+    def test_marker_with_surrounding_whitespace(self):
+        indented = INTRO.replace(changelog.MARKER, "  \t" + changelog.MARKER + " \t")
+        self.assertEqual("yab-1", changelog.format_of(indented))
+        self.assertEqual(1, len(errors(indented + "## [Unreleased]\n- #1: no tag\n")))
+
     def test_unknown_format_is_a_finding(self):
         found = changelog.lint(INTRO.replace("yab-1", "yab-9"))
         self.assertEqual(1, len(found))
