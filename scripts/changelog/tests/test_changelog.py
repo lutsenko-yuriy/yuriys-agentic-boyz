@@ -145,6 +145,26 @@ class FormatMarkerTest(unittest.TestCase):
         self.assertEqual("yab-1", changelog.format_of(indented))
         self.assertEqual(1, len(errors(indented + "## [Unreleased]\n- #1: no tag\n")))
 
+    def test_marker_below_the_intro_is_not_an_opt_in(self):
+        for where in ["## [Unreleased]\n%s\n- x\n", "```\n%s\n```\n", "\n---\n\n%s\n"]:
+            text = UNMARKED_INTRO + where % changelog.MARKER
+            self.assertIsNone(changelog.format_of(text), where)
+            self.assertEqual([], errors(text), where)
+
+    def test_second_marker_is_a_finding(self):
+        base = INTRO.count("\n")
+        for text, line in [
+            (INTRO.replace(changelog.MARKER, changelog.MARKER + "\n" + changelog.MARKER), 6),
+            (doc("- #1: x [meta]") + changelog.MARKER.replace("yab-1", "yab-9") + "\n", None),
+            (INTRO + "## [1.0.0] — 2026-01-02\n```\n  %s\n```\n" % changelog.MARKER, base + 3),
+        ]:
+            found = changelog.lint(text)
+            self.assertEqual(1, len(found), (text, found))
+            self.assertIn("second", found[0]["error"])
+            self.assertEqual(changelog.FORMAT, changelog.format_of(text))
+            if line:
+                self.assertEqual(line, found[0]["line"])
+
     def test_unknown_format_is_a_finding(self):
         found = changelog.lint(INTRO.replace("yab-1", "yab-9"))
         self.assertEqual(1, len(found))

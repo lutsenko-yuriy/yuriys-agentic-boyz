@@ -9,8 +9,9 @@ Usage:
 Line grammar (skills/manage/ship/resources/changelog-tags.md):
     - <ID>: <summary> (PR #N) [tag]... <MAJOR|MINOR|PATCH> flags: <name>, <name>   (mark and flags as the rules require)
 
-Only a CHANGELOG with the format marker line `<!-- changelog-format: yab-1 -->` is linted; without it `lint` prints a
-notice and exits 0, and `unreleased`/`propose` still parse but add the notice to their output.
+Only a CHANGELOG with the format marker line `<!-- changelog-format: yab-1 -->` above the first `---` is linted (a second
+marker anywhere is a finding); without it `lint` prints a notice and exits 0, and `unreleased`/`propose` still parse
+but add the notice to their output.
 Only `## [Unreleased]` lines are linted; numbered `## [X.Y.Z]` sections are checked for their heading format only.
 Prints JSON on stdout. Exit codes: 0 ok, 1 findings or refusal.
 """
@@ -58,20 +59,26 @@ def _blank_comments(text: str) -> List[str]:
     return COMMENT_RE.sub(lambda m: re.sub(r"[^\n]", "", m.group(0)), text).splitlines()
 
 
-def _markers(text: str) -> List[Tuple[int, str]]:
-    """[(line number, format)] for each marker line; a BOM, CRLF and surrounding whitespace are ignored."""
-    found = []
+def _markers(text: str) -> List[Tuple[int, str, bool]]:
+    """[(line number, format, in intro)] for each marker line; the intro ends at the first '---' line.
+
+    A BOM, CRLF and surrounding whitespace are ignored.
+    """
+    found, intro = [], True
     for n, raw in enumerate(text.lstrip("\ufeff").splitlines(), 1):
-        m = MARKER_RE.match(raw.strip())
+        line = raw.strip()
+        if line == "---":
+            intro = False
+        m = MARKER_RE.match(line)
         if m:
-            found.append((n, m.group(1)))
+            found.append((n, m.group(1), intro))
     return found
 
 
 def format_of(text: str) -> Optional[str]:
-    """The format named by the marker line, or None for a CHANGELOG that has not opted in."""
-    markers = _markers(text)
-    return markers[0][1] if markers else None
+    """The format named by the first marker line in the intro, or None for a CHANGELOG that has not opted in."""
+    opt_in = [fmt for _, fmt, intro in _markers(text) if intro]
+    return opt_in[0] if opt_in else None
 
 
 def parse_entry(line: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -145,12 +152,15 @@ def _scan(text: str) -> Tuple[List[Dict[str, Any]], List[Tuple[int, str, Dict[st
 def lint(text: str) -> List[Dict[str, Any]]:
     """Findings for a CHANGELOG with the format marker; none for one without it."""
     markers = _markers(text)
-    if not markers:
+    opt_in = [m for m in markers if m[2]]
+    if not opt_in:
         return []
-    line, fmt = markers[0]
+    line, fmt, _ = opt_in[0]
+    findings = [{"line": n, "error": "second changelog-format marker; keep only the one above the first '---'"}
+                for n, _, _ in markers if n != line]
     if fmt != FORMAT:
-        return [{"line": line, "error": "unknown changelog format %r; supported: %s" % (fmt, FORMAT)}]
-    return _scan(text)[0]
+        return [{"line": line, "error": "unknown changelog format %r; supported: %s" % (fmt, FORMAT)}] + findings
+    return sorted(findings + _scan(text)[0], key=lambda f: f["line"])
 
 
 def unreleased(text: str) -> Dict[str, Any]:
