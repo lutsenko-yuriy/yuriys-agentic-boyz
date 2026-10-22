@@ -162,6 +162,14 @@ class SubstitutionTests(unittest.TestCase):
                 self.assertEqual(json.loads(out)["warnings"], [])
                 self.assertEqual((root / "a.md").read_text(), expected)
 
+    def test_legacy_experiment_tool_none_is_normalised_like_tools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp, toml_text("github", name="N", experiment_tool="None"),
+                             {"a.md": ph("EXPERIMENT_TOOL")})
+            code, _, err = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0, err)
+            self.assertEqual((root / "a.md").read_text(), "none")
+
     def test_unknown_pm_is_an_error_and_writes_nothing(self):
         for pm in ["trello", "jira", "github_issues", "files"]:
             with self.subTest(pm), tempfile.TemporaryDirectory() as tmp:

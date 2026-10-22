@@ -76,7 +76,8 @@ LIST_FIELDS = {"available_models", "in_qa_paths"}
 # Keys must be skill_router provider names (scripts/skill_router/providers): [providers].pm routes to that provider.
 PM_TOOLS = {"linear": "Linear", "github": "GitHub Issues"}
 PROJECT_KEYS = set(PLACEHOLDER_FIELDS.values()) | {"keep_licence"}
-# PM_TOOL from [providers].pm, EXPERIMENT_TOOL from [tools].feature_flags (legacy [project].experiment_tool without [tools]).
+# PM_TOOL from [providers].pm, EXPERIMENT_TOOL from [tools].feature_flags
+# (legacy [project].experiment_tool when there is no [tools] table).
 DERIVED_PLACEHOLDERS = {"PM_TOOL", "EXPERIMENT_TOOL"}
 # Retired [project] keys: accepted without a warning; only read as the fallback above.
 LEGACY_PROJECT_KEYS = {"experiment_tool"}
@@ -494,6 +495,8 @@ def _values(project: Dict[str, Any], pm: str, tools: Optional[Dict[str, str]]) -
             raise OnboardError("skill_router.toml: project.issue_prefix %r is invalid (letters/digits, 2-10 chars, not N/A)" % raw)
         if PLACEHOLDER_RE.search(raw):
             raise OnboardError("skill_router.toml: project.%s must not contain a {{PLACEHOLDER}}" % field)
+        if field == "experiment_tool" and raw.lower() == "none":
+            raw = "none"
         if raw:
             values[name] = raw
     if pm:
