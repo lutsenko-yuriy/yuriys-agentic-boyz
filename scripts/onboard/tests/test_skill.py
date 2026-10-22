@@ -176,7 +176,7 @@ class ConfigAgreementTest(unittest.TestCase):
     def test_manual_placeholders_are_named(self):
         # Placeholders apply never fills, still present in tracked files, must have a manual step in the skill.
         out = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True, text=True).stdout
-        manual = set(onboard.KNOWN_PLACEHOLDERS) - set(onboard.PLACEHOLDER_FIELDS) - {"PM_TOOL"}
+        manual = set(onboard.KNOWN_PLACEHOLDERS) - set(onboard.PLACEHOLDER_FIELDS) - onboard.DERIVED_PLACEHOLDERS
         present = set()
         for rel in (f for f in out.split("\0") if f and onboard._scanned(f)):
             if rel.startswith("skills/configure/onboard/"):
@@ -204,13 +204,46 @@ class ConfigAgreementTest(unittest.TestCase):
         harmless = {"docs/experiments/README.md"}
         none_ok = set((block("none-ok", SKILL.read_text(encoding="utf-8")) or "").split())
         out = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True, text=True).stdout
-        for key in sorted(none_ok):
-            name = next(n for n, f in onboard.PLACEHOLDER_FIELDS.items() if f == key)
+        # EXPERIMENT_TOOL is derived from [tools].feature_flags, which may be none.
+        names = [next(n for n, f in onboard.PLACEHOLDER_FIELDS.items() if f == key) for key in sorted(none_ok)]
+        for key, name in zip(sorted(none_ok) + ["feature_flags"], names + ["EXPERIMENT_TOOL"]):
             token = "{{%s}}" % name
             users = {f for f in out.split("\0") if f and onboard._scanned(f)
                      and (ROOT / f).is_file() and not f.startswith("skills/configure/onboard/")
                      and token in (ROOT / f).read_text(encoding="utf-8")}
             self.assertLessEqual(users, harmless, "%s: %s" % (key, sorted(users - harmless)))
+
+    def test_tool_keys_match(self):
+        keys = (block("tool-keys", SKILL.read_text(encoding="utf-8")) or "").split()
+        self.assertEqual(onboard.TOOL_KEYS, keys)
+
+    def test_tools_rule_covers_missing_table_and_empty_value(self):
+        config = (ROOT / "skills/shared/project-config.md").read_text(encoding="utf-8")
+        rule = config.split("## Tools", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("missing `[tools]` table", rule)
+        self.assertIn("empty value", rule)
+        self.assertRegex(rule, r"(?i)consumers act only on `none`")
+
+    def test_tool_consumers_name_their_key(self):
+        config = (ROOT / "skills/shared/project-config.md").read_text(encoding="utf-8")
+        for key in onboard.TOOL_KEYS:
+            self.assertIn("`[tools].%s`" % key, config)
+        for rel, key in [
+            ("skills/design/analyze/SKILL.md", "analytics"),
+            ("docs/workflows/FEATURE.md", "feature_flags"),
+            ("skills/manage/checkup/resources/light-dimensions.md", "feature_flags"),
+        ]:
+            with self.subTest(rel):
+                text = (ROOT / rel).read_text(encoding="utf-8")
+                self.assertIn("[tools].%s" % key, text)
+                # The missing-table / empty-value rule lives once in project-config.md; consumers point to it.
+                self.assertIn("skills/shared/project-config.md", text)
+                self.assertNotRegex(text, r"(?i)(missing|no) `\[tools\]` table|empty value")
+
+    @template_only
+    def test_analytics_catalogue_names_its_key(self):
+        # Adopters own docs/ANALYTICS_EVENTS.md (their event catalogue), so only the shipped template is checked.
+        self.assertIn("[tools].analytics", (ROOT / "docs/ANALYTICS_EVENTS.md").read_text(encoding="utf-8"))
 
     def test_every_key_needs_a_concrete_value(self):
         text = SKILL.read_text(encoding="utf-8")
@@ -305,10 +338,12 @@ def has_tomllib():
 def write_config(root, empty=()):
     project = {k: "none" for k in onboard.PROJECT_KEYS if k != "keep_licence"}
     project.update(name="Demo", description="A demo", issue_prefix="DEM", architecture_summary="Layered")
+    tools = {k: "none" for k in onboard.TOOL_KEYS}
     for key in empty:
-        project[key] = ""
+        (tools if key in tools else project)[key] = ""
     lines = ['[providers]', 'pm = "github"', 'vcs = "github"', "", "[project]"]
     lines += ['%s = %s' % (k, json.dumps(v)) for k, v in sorted(project.items())]
+    lines += ["", "[tools]"] + ['%s = %s' % (k, json.dumps(v)) for k, v in tools.items()]
     (root / "skill_router.toml").write_text("\n".join(lines) + "\n")
 
 
@@ -347,7 +382,7 @@ class ApplyEndToEndTest(unittest.TestCase):
         # Why the skill demands `none`: this placeholder lives in a file the gate will not let the agent edit.
         with tempfile.TemporaryDirectory() as tmp:
             root = make_clone(tmp)
-            write_config(root, empty=["experiment_tool"])
+            write_config(root, empty=["feature_flags"])
             onboard.apply(root)
             self.assertIn("docs/experiments/README.md", stranded(root))
 

@@ -1,6 +1,6 @@
 # Analytics Events
 
-All events are sent via the analytics service abstraction (a thin wrapper around the underlying analytics SDK).
+Events are sent with the tool recorded in `skill_router.toml` `[tools].analytics`. When it is `none`, nothing is sent yet: this catalogue is the plan to instrument once a tool is adopted.
 
 ---
 

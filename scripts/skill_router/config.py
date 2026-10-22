@@ -19,7 +19,7 @@ class Config:
     model_tiers_path: str
 
 
-_RESERVED_TOML_SECTIONS = {"providers", "llm", "core", "project"}
+_RESERVED_TOML_SECTIONS = {"providers", "llm", "core", "project", "tools"}
 
 
 def _load_toml(path: Path) -> dict:
