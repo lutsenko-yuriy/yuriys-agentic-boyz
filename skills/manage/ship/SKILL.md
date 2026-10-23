@@ -103,7 +103,7 @@ The merge method does not affect releases: `/prepare-release` finds the release 
 2. Merge the code PR, with the merge-method check run against the code repo (`gh repo view <code-slug> ...`, `gh pr merge <N> -R <code-slug> ...`).
 3. Only after that succeeds, merge the tracking PR the same way in the tracking repo.
 
-If step 3 fails after the code PR merged, re-run only step 3; never repeat steps 1–4, which would add a second CHANGELOG line.
+If the tracking-PR merge fails after the code PR merged, re-run only the tracking-PR merge; never repeat ship steps 1–4, which would add a second CHANGELOG line.
 
 ### 6. Report back
 
