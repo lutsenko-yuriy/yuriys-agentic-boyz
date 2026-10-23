@@ -185,11 +185,11 @@ class RealFilesTest(unittest.TestCase):
         self.assertTrue(hidden)
         self.assertEqual([], [ln for ln in hidden if ln.startswith(("#", "- "))])
 
-    def test_emptied_template_changelog_passes(self):
+    def test_shipped_changelog_is_empty_and_opted_in(self):
         text = (ROOT / "docs" / "CHANGELOG.md").read_text(encoding="utf-8")
-        emptied = onboard._empty_changelog(text)
-        self.assertEqual(changelog.FORMAT, changelog.format_of(emptied))  # new projects start opted in
-        self.assertEqual([], changelog.lint(emptied))
+        self.assertEqual(changelog.FORMAT, changelog.format_of(text))  # new projects start opted in
+        self.assertNotIn("## [Unreleased]", onboard._strip_comments(text))
+        self.assertEqual([], changelog.lint(text))
 
 
 class UnreleasedTest(unittest.TestCase):

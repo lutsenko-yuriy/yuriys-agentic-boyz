@@ -6,27 +6,6 @@ A record of all versioned releases. For planned work and known issues, see @docs
 
 ---
 
-## [Unreleased]
-
-### Added / Changed / Fixed
-- HAB-278 WU1: onboard.py probe, check, and mark subcommands [wip]
-- HAB-278 WU2: onboard.py apply subcommand and [project] config schema in skill_router.toml [wip]
-- HAB-278 WU3: scripts/onboard/bash_policy.py — read-only Bash allowlist for the onboarding gate (pipes only; getopt-aware denial of write/exec flags; Python 3.9-safe) [wip]
-- HAB-278 WU4: scripts/onboard/gate.py + gate.sh — onboarding gate hook dispatcher (PreToolUse/UserPromptExpansion/SessionStart; fail-closed for tools, fail-open for prompts, 3 s watchdog); not wired until WU7 (PR #18) [wip]
-- HAB-278 WU5: TECH_STACK/CODE_STYLE/CONSTRAINTS templates (yab:template marker) + check token/cross-check hardening; audit/review skills reference them (PR #19) [wip]
-- HAB-278 WU6: /onboard skill (inline; probe→config→apply→artifacts→model tiers→check/mark; human-only steps for template/fork) + skill/gate agreement tests; check rejects project_id 'none' for linear (PR #20) [wip]
-- HAB-278 WU7: cutover — gate hooks wired in committed .claude/settings.json, .yab-template sentinel, setup.sh removed, CI test job; check/apply refuse untracked or uncommitted template files; no-.git deny hint (PR #21) [wip]
-- HAB-278 WU8: README rewritten for /onboard (launch from repo root, gate, produced files, human steps, onboarded marker); README exemption removed from skill tests (PR #22) [wip]
-- HAB-278 WU9a: template-state tests (shipped templates, placeholder coverage, sentinel, template toml shape) are skipped via shared `template_only` helper once `.yab-template` is gone, so an onboarded project's inherited CI (tests.yml) stays green; YAB's own CI (GITHUB_REPOSITORY) never skips, so a missing sentinel fails there; tests.yml also runs on push to `master` for adopters (PR #23) [wip]
-- HAB-278 WU19: onboard.py remote (template clone origin: new GitHub repo via gh, URL, or none; push URL cleared) + /onboard step A runs it with consent; gate.sh fast path skips Python when onboarded (PR #24) [wip]
-- HAB-278 WU20: template clones get a project README and an empty CHANGELOG — apply empties the template CHANGELOG with a YAB sentinel (staged-only counts; unstaged edits kept and warned); check errors on a README still titled "Multi-Agent Project Template"; README.md is a bootstrap path and /onboard step 6 writes it (PR #25) [wip]
-- HAB-278 WU21: skill_router fixes (warn when skill_router.toml unreadable without tomllib; exit 2 when a context provider lacks fetch_context/format_context), AGENTS.md session start reads [providers].pm ({{ISSUE_PREFIX}}-N = GitHub issue #N with github), skill_router tests run in their own CI job on 3.9/3.12 (PR #26) [wip]
-- #42: /onboard asks for analytics, logging and feature-flag tools ([tools] in skill_router.toml; none is a recorded answer; /analyze, FEATURE 1.4 and checkup act on it) (PR #43) [meta]
-- #44 WU1: changelog.py lint/unreleased/propose with opt-in format marker; /ship writes marked lines and no longer bumps (PR #48) [wip]
-- #44 WU2: /prepare-release skill; [release] config; changelog.py cut/notes/latest; /ship merge-method fallback (PR #49) [meta]
-
----
-
 <!-- Format examples, indented so they are not real headings. /ship appends one line per merged PR under the
      single ## [Unreleased] heading at the top (outside this comment; created after the first --- if absent):
 
