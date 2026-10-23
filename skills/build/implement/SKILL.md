@@ -184,3 +184,4 @@ Return: what was built, PR/MR number and URL, test results, any deviations from 
 - **Do not merge** — that is the `ship` skill's responsibility.
 - **Do not update `docs/ARCHITECTURE.md` or `docs/PRODUCT_SPEC.md` directly** — delegate as described in step 8.
 - Fix all test and lint failures before opening the PR/MR. Never leave the build red.
+- Before every commit, confirm from the exit status that the test command passed; truncated output can't show that (`| tail` hides a failing status).
