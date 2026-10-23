@@ -124,7 +124,7 @@ Proposed defaults: `ai_commit_trailer` is the current agent's trailer line (for 
 
 ### 4. Apply
 
-Run `apply`. It substitutes the `[project]` values everywhere (and `EXPERIMENT_TOOL`, the experiment line in `docs/experiments/README.md`, from `[tools].feature_flags`, or from a legacy `[project].experiment_tool` only when there is no `[tools]` table), reconciles `.mcp.json` with `pm` and clears the template sentinel; in a template clone it also empties the template's `docs/CHANGELOG.md` (`changelog_reset`). Report its `changed`, `unresolved` and `warnings`. Re-running is safe.
+Run `apply`. It substitutes the `[project]` values everywhere (and `EXPERIMENT_TOOL`, the experiment line in `docs/experiments/README.md`, from `[tools].feature_flags`, or from a legacy `[project].experiment_tool` only when there is no `[tools]` table), reconciles `.mcp.json` with `pm` and clears the template sentinel. Report its `changed`, `unresolved` and `warnings`. Re-running is safe.
 
 `apply` supplies every placeholder that has a `[project]` key. The one placeholder it never supplies is `CODE_STYLE` in `AGENTS.md`, which step 6 handles. If `unresolved` lists anything else, correct the value in `skill_router.toml` and re-run `apply`; values for `skills/shared/project-config.md` (test, version, QA fields) come from there too, so that file needs no hand edit.
 

@@ -42,7 +42,7 @@ It probes your machine, infers the stack from the repo, asks only what it cannot
 - in a project created from this template, a `README.md` of its own in place of this one
 - optionally a gitignored `CLAUDE.local.md` with per-machine settings
 
-`onboard.py apply` then fills the `[project]` values into the template placeholders in tracked files (except `scripts/onboard/`, `docs/knowledge/` and `docs/CHANGELOG.md`; re-running is safe), reconciles `.mcp.json` with your PM tool, deletes `LICENSE` if `keep_licence = false`, and removes the `.yab-template` sentinel. On that first run it also empties `docs/CHANGELOG.md`, which until then holds this template's history. `onboard.py check` reports what is left; `onboard.py mark` refuses until it is clean.
+`onboard.py apply` then fills the `[project]` values into the template placeholders in tracked files (except `scripts/onboard/`, `docs/knowledge/` and `docs/CHANGELOG.md`; re-running is safe), reconciles `.mcp.json` with your PM tool, deletes `LICENSE` if `keep_licence = false`, and removes the `.yab-template` sentinel. The template ships an empty `docs/CHANGELOG.md`, so your project's history starts clean. `onboard.py check` reports what is left; `onboard.py mark` refuses until it is clean.
 
 ### Steps you do yourself
 
@@ -79,3 +79,4 @@ After onboarding, commit and push the result before collaborators clone; otherwi
 - **Tool-agnostic by design** — skills describe what to do per PM tool (Linear or GitHub Issues, set by `[providers].pm`); the Git host is GitHub.
 - **Model-agnostic by design** — skills declare `effort` and `reasoning` tiers instead of model names. The `calibrate` skill maps your available models to those tiers once, and the active mapping lives in `docs/MODEL_TIERS.md`.
 - **Communication styles** — the `style` skill switches between DETAILED (full prose), CONCISE (lecture-note shorthand), and SCHEMATIC (TeX-like notation). Active style persists across sessions via `CLAUDE.local.md`.
+- **How this template is developed** — YAB is developed in a separate private dev project, which holds its backlog, history and notes. Use this repository's Issues for feedback as an adopter.
