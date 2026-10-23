@@ -93,7 +93,7 @@ Ask: say "go" to release, or change anything above. Re-show the summary after ev
 **Rejected (protected branch):**
 
 1. `git switch -c release/vX.Y.Z`, then `git push -u origin release/vX.Y.Z`.
-2. Return the default branch to `origin/<default>`: the release commit now lives on the release branch, so this drops nothing.
+2. While still on `release/vX.Y.Z`, run `git branch -f <default> origin/<default>`. It is safe: step 1 checked that the tree was clean and `<default>` was level with `origin/<default>`, so the only commit it drops from `<default>` is the release commit, which `release/vX.Y.Z` holds and the remote already has. It touches neither the working tree nor the checked-out branch. Without it, step 5's `git pull --ff-only` fails after a squash or rebase merge.
 3. Open a PR/MR from `release/vX.Y.Z` titled `chore: release vX.Y.Z`, with the summary as its body (GitHub: `gh pr create --body-file <file>`; GitLab: `glab mr create`). Open its URL in the browser.
 4. **Stop.** Never merge it yourself: the branch's protection, review rules and merge method apply. Ask the user to merge it and to say "merged".
 5. After "merged": `git fetch origin --tags`, `git switch <default>`, `git pull --ff-only`. The release commit is the first-parent commit that added the heading: `git log --first-parent -1 --format=%H -S'## [X.Y.Z]' origin/<default> -- docs/CHANGELOG.md`. Check that `changelog.py notes docs/CHANGELOG.md X.Y.Z` succeeds there. If nothing is found, stop and ask.

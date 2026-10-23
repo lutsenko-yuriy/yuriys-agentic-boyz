@@ -602,6 +602,12 @@ class PrepareReleaseTest(unittest.TestCase):
         self.assertRegex(step, r"(?i)failed.*still running.*`none`")
         self.assertIn("manual step", step)
 
+    def test_rejected_push_names_the_branch_reset(self):
+        step = self.SKILL.read_text(encoding="utf-8").split("## 7.")[1].split("\n## ")[0]
+        self.assertIn("`git branch -f <default> origin/<default>`", step)
+        self.assertRegex(step, r"(?i)safe")
+        self.assertLess(step.index("git push -u origin release/vX.Y.Z"), step.index("git branch -f"))
+
     def test_protected_branch_opens_a_release_pr_and_never_merges(self):
         text = self.SKILL.read_text(encoding="utf-8")
         self.assertIn("release/vX.Y.Z", text)
