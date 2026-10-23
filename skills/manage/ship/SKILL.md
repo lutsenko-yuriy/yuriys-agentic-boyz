@@ -16,6 +16,8 @@ The project management tool is **{{PM_TOOL}}**. The issue identifier prefix is *
 
 Run all steps in order. Each step must succeed before moving to the next.
 
+**Two-repo sessions** (`[project].code_repo_dir` set; empty means one repo, skip this): steps 1–4 write in the tracking repo, and the CHANGELOG line cites `(PR <code-slug>#N)`. Step 5 splits in two, see there. Rules: `skills/shared/project-config.md`, "Repositories".
+
 ### 1. Close the linked issue(s)
 
 Move each issue linked to the PR/MR to **Done** (or the equivalent closed state) in the PM tool.
@@ -94,6 +96,8 @@ Then merge the PR/MR on your Git host. Prefer a merge commit; use another method
 | Bitbucket | merge via Bitbucket REST API or UI |
 
 The merge method does not affect releases: `/prepare-release` finds the release commit with a first-parent lookup, which works with every merge method.
+
+**Two-repo sessions:** (a) merge the code PR in the code repo, with the merge-method check run against it (`gh repo view <code-slug> ...`, `gh pr merge ... -R <code-slug>`). (b) Commit the tracking files above onto the ticket's tracking branch `feature/{{ISSUE_PREFIX}}-XX-<desc>` (create it from `origin/main` if missing), push, open the tracking PR and merge it the same way.
 
 ### 6. Report back
 

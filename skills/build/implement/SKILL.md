@@ -14,6 +14,7 @@ The project management tool is **{{PM_TOOL}}**. The Git host is **{{GIT_HOST}}**
 
 1. Read `CLAUDE.local.md` for local binary paths and environment settings.
 2. Read `CLAUDE.md` and `docs/ARCHITECTURE.md` to orient yourself before touching any code.
+3. **Two-repo sessions** (`[project].code_repo_dir` set; empty means one repo, skip this): steps 3–12 run in the code repo with its own test, format and lint commands, and the PR body says `Part of <tracking-slug>#N` instead of `Closes`. Steps 1–2 and 13–14 stay in the tracking repo. Rules: `skills/shared/project-config.md`, "Repositories".
 
 ---
 

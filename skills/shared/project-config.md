@@ -31,6 +31,23 @@ How `/prepare-release` publishes a release, recorded by `/onboard` in `skill_rou
 
 A missing `[release]` table (onboarded before these were recorded) or an empty value means "not recorded", which differs from `[tools]`: there is no command to assume. `/prepare-release` then stops after the tag and says publishing is up to the user, and when flagged lines are selected it asks for the gate location or an explicit "proceed without gates". `version_gates = none` with flagged lines selected gets the same risk warning in the release summary.
 
+## Repositories
+
+`skill_router.toml` `[project].code_repo_dir` is empty in most projects: one repo holds everything, and the two-repo notes in skills do not apply. Skip them.
+
+When it is set (a path relative to this repo, e.g. `../app`), this repo is the **tracking repo** and the session runs here, launched with `claude --add-dir <code_repo_dir>`. The code lives in the **code repo**:
+
+| Artifact | Repo |
+|---|---|
+| Code, tests, skill and workflow files | code repo |
+| Issues (PM), `docs/knowledge/notes/`, CHANGELOG, BACKLOG, ADRs | tracking repo |
+
+- Run git in the code repo as `git -C <code_repo_dir>`, and `gh` as `gh ... -R <code-slug>`, where `<code-slug>` is `gh repo view --json nameWithOwner -q .nameWithOwner` run in that directory. Tests, formatter and linter are the code repo's own commands, run there.
+- Issue IDs, the prefix and branch names are the tracking repo's: `feature/{{ISSUE_PREFIX}}-XX-<desc>` in both repos.
+- Each ticket has two PRs. The **code PR** says `Part of <tracking-slug>#N`, never `Closes`: `/ship` closes the issue. The **tracking PR**, on the same branch name in the tracking repo, carries the CHANGELOG line, BACKLOG and notes.
+- The CHANGELOG cites the code PR as `(PR <code-slug>#N)`.
+- When the code repo is the template these skills come from, the session runs the tracking repo's synced copy of each skill, not the one being edited.
+
 ## Project management
 
 @skills/shared/pm-tool-mapping.md
