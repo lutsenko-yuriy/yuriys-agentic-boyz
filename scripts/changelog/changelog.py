@@ -278,7 +278,7 @@ def cut(text: str, version: str, keep: List[int], notes_text: str, date: str) ->
     release = ["## [%s] — %s" % (version, date), ""]
     if notes_lines:
         release += [RELEASE_NOTES] + notes_lines + [""]
-    release += [CHANGES] + moved + [""]
+    release += [CHANGES] + moved + ([""] if raw[end:] else [])
     out = raw[:start] + head + release + raw[end:]
     return "\n".join(out) + "\n"
 
