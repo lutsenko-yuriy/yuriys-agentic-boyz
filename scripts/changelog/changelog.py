@@ -9,7 +9,7 @@ Usage:
     python3 scripts/changelog/changelog.py cut <path> X.Y.Z [--keep N ...] [--notes-file F] [--date YYYY-MM-DD]
         # release commit content: every [Unreleased] line except the kept app lines (file line numbers, as
         # `unreleased` reports them) moves under a new `## [X.Y.Z] — date` heading with `### Release notes`
-        # (from F, omitted when empty) and `### Changes`; an emptied `## [Unreleased]` is removed
+        # (from F, omitted when empty) and `### Changes`; comments and subheadings stay, and an `## [Unreleased]` left empty is removed
     python3 scripts/changelog/changelog.py notes <path> X.Y.Z                  # that release's notes, plain text
 
 Line grammar (skills/manage/ship/resources/changelog-tags.md):
@@ -273,7 +273,8 @@ def cut(text: str, version: str, keep: List[int], notes_text: str, date: str) ->
     body = [raw[i] for i in range(start + 1, end) if not (i in entries and i + 1 not in keep)]
     while body and not body[-1].strip():
         body.pop()
-    head = [raw[start]] + body + [""] if keep else []
+    # Comments, subheadings and kept lines stay; an [Unreleased] left with only blank lines is removed.
+    head = [raw[start]] + body + [""] if any(ln.strip() for ln in body) else []
     notes_lines = notes_text.strip("\n").splitlines() if notes_text.strip() else []
     release = ["## [%s] — %s" % (version, date), ""]
     if notes_lines:

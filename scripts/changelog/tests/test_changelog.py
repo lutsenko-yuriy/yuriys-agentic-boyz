@@ -262,13 +262,27 @@ class CutTest(unittest.TestCase):
     def cut(self, text=None, version="1.1.0", keep=(), notes="- Better things.\n", date="2026-10-23"):
         return changelog.cut(text or self.TEXT, version, list(keep), notes, date)
 
-    def test_everything_moves_and_unreleased_is_removed(self):
-        out = self.cut(version="2.0.0")
+    def test_everything_moves_and_an_emptied_unreleased_is_removed(self):
+        text = doc("- #1: a [user] PATCH", released=RELEASED)
+        out = self.cut(text=text, version="2.0.0")
+        self.assertTrue(out.startswith(INTRO + "## [2.0.0] — 2026-10-23\n"), out)
         self.assertNotIn("## [Unreleased]", out.replace(FOOTER, ""))
+
+    def test_non_entry_lines_stay_in_unreleased(self):
+        text = doc("<!-- keep this note\n- #0: commented out [user] PATCH -->", "### Added / Changed / Fixed",
+                   "- #1: a [user] PATCH", released=RELEASED)
+        out = self.cut(text=text, version="2.0.0")
+        self.assertTrue(out.startswith(INTRO + "## [Unreleased]\n<!-- keep this note\n- #0: commented out [user] PATCH -->\n"
+                                       "### Added / Changed / Fixed\n\n## [2.0.0] — 2026-10-23\n"), out)
+        self.assertIn("### Changes\n- #1: a [user] PATCH\n\n## [1.0.0]", out)
+        self.assertEqual([], changelog.lint(out))
+
+    def test_everything_moves(self):
+        out = self.cut(version="2.0.0")
+        self.assertTrue(out.startswith(INTRO + "## [Unreleased]\n### Added / Changed / Fixed\n\n## [2.0.0]"), out)
         self.assertIn("## [2.0.0] — 2026-10-23\n\n### Release notes\n- Better things.\n\n### Changes\n"
                       "- #1: a [meta]\n- #2: b (PR #3) [user] MINOR flags: f1\n- #4: c [app] PATCH\n"
                       "- #5: d [user] MAJOR\n\n## [1.0.0] — 2026-01-02", out)
-        self.assertTrue(out.startswith(INTRO + "## [2.0.0]"))
         self.assertTrue(out.endswith(FOOTER))
         self.assertEqual([], changelog.lint(out))
 
