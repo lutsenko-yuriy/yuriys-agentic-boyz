@@ -195,9 +195,10 @@ class ConfigAgreementTest(unittest.TestCase):
         text = SKILL.read_text(encoding="utf-8")
         none_ok = set((block("none-ok", text) or "").split())
         real = set((block("real-value", text) or "").split())
-        self.assertTrue(none_ok and real)
-        self.assertEqual(set(), none_ok & real)
-        self.assertEqual(onboard.PROJECT_KEYS - {"keep_licence"}, none_ok | real)
+        empty_ok = set((block("empty-ok", text) or "").split())
+        self.assertTrue(none_ok and real and empty_ok)
+        self.assertEqual(set(), (none_ok & real) | (empty_ok & (none_ok | real)))
+        self.assertEqual(onboard.PROJECT_KEYS - {"keep_licence"}, none_ok | real | empty_ok)
 
     @template_only
     def test_none_is_only_allowed_where_no_consumer_pastes_it(self):
@@ -365,7 +366,7 @@ def has_tomllib():
 
 
 def write_config(root, empty=()):
-    project = {k: "none" for k in onboard.PROJECT_KEYS if k != "keep_licence"}
+    project = {k: "none" for k in onboard.PROJECT_KEYS if k not in ("keep_licence", "code_repo_dir")}
     project.update(name="Demo", description="A demo", issue_prefix="DEM", architecture_summary="Layered")
     tools = {k: "none" for k in onboard.TOOL_KEYS}
     for key in empty:

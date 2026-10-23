@@ -235,6 +235,15 @@ class SubstitutionTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(json.loads(out)["warnings"], ["skill_router.toml: unknown project.keep_license ignored"])
 
+    def test_code_repo_dir_is_a_known_key_not_a_placeholder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(tmp, toml_text(name="N", code_repo_dir="../code"), {"a.md": ph("PROJECT_NAME")})
+            code, out, _ = run_apply(root, "--root", str(root))
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out)["warnings"], [])
+            self.assertEqual((root / "a.md").read_text(), "N")
+        self.assertNotIn("code_repo_dir", onboard.PLACEHOLDER_FIELDS.values())
+
     def test_unknown_tools_keys_are_warned(self):
         with tempfile.TemporaryDirectory() as tmp:
             extra = '[tools]\nanalytics = "none"\nlogging = "none"\nfeature_flag = "Statsig"\n'

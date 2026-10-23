@@ -75,7 +75,8 @@ PLACEHOLDER_FIELDS = {
 LIST_FIELDS = {"available_models", "in_qa_paths"}
 # Keys must be skill_router provider names (scripts/skill_router/providers): [providers].pm routes to that provider.
 PM_TOOLS = {"linear": "Linear", "github": "GitHub Issues"}
-PROJECT_KEYS = set(PLACEHOLDER_FIELDS.values()) | {"keep_licence"}
+# code_repo_dir: the sibling clone that receives code PRs in a two-repo setup; read by skills at runtime, not substituted.
+PROJECT_KEYS = set(PLACEHOLDER_FIELDS.values()) | {"keep_licence", "code_repo_dir"}
 # PM_TOOL from [providers].pm, EXPERIMENT_TOOL from [tools].feature_flags
 # (legacy [project].experiment_tool when there is no [tools] table).
 DERIVED_PLACEHOLDERS = {"PM_TOOL", "EXPERIMENT_TOOL"}
@@ -383,6 +384,21 @@ def _unknown_keys(table: Optional[Dict[str, Any]], section: str, keys: List[str]
     return ["skill_router.toml: unknown %s.%s ignored" % (section, k) for k in sorted(set(table or {}) - set(keys))]
 
 
+def _code_repo_warning(root: Path, value: Any) -> Optional[str]:
+    """A warning when project.code_repo_dir is set but is not the root of a separate git clone; empty means one repo."""
+    if not isinstance(value, str):
+        return "project.code_repo_dir must be a path string; two-repo sessions are off"
+    if not value.strip():
+        return None
+    target = (root / value.strip()).resolve()
+    if not target.is_dir():
+        return "project.code_repo_dir %r does not exist; two-repo sessions will fail until it is cloned" % value
+    top = _git(target, "rev-parse", "--show-toplevel", allow_fail=True).strip()
+    if not top or Path(top).resolve() != target or target == root.resolve():
+        return "project.code_repo_dir %r is not the root of a separate git clone" % value
+    return None
+
+
 def _check_config(root: Path, errors: List[str], warnings: List[str]) -> str:
     if not (root / "skill_router.toml").is_file():
         errors.append("skill_router.toml missing")
@@ -404,6 +420,9 @@ def _check_config(root: Path, errors: List[str], warnings: List[str]) -> str:
                       "move a legacy [linear].project_id there)")
     elif pm == "linear" and re.match(r"none\b", str(project.get("project_id", "")).strip(), re.I):
         errors.append("project.project_id must be a real id when providers.pm is linear, not 'none'")
+    code_repo = _code_repo_warning(root, project.get("code_repo_dir", ""))
+    if code_repo:
+        warnings.append(code_repo)
     tools, tool_errors = _tools(table)
     errors.extend(tool_errors)
     warnings.extend(_unknown_keys(table, "tools", TOOL_KEYS))
