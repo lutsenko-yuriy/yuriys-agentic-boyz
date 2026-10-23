@@ -35,7 +35,7 @@ A missing `[release]` table (onboarded before these were recorded) or an empty v
 
 `skill_router.toml` `[project].code_repo_dir` is empty in most projects: one repo holds everything, and the two-repo notes in skills do not apply. Skip them.
 
-When it is set (a path relative to this repo, e.g. `../app`), this repo is the **tracking repo** and the session runs here, launched with `claude --add-dir <code_repo_dir>`. The code lives in the **code repo**:
+When it is set (a path relative to this repo or starting with `~`, e.g. `../app`), this repo is the **tracking repo** and the session runs here, launched with `claude --add-dir <code_repo_dir>`. The code lives in the **code repo**:
 
 | Artifact | Repo |
 |---|---|
