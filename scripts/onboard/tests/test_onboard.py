@@ -384,6 +384,84 @@ class CheckTests(unittest.TestCase):
                 self.assertTrue(r["ok"], r)
                 self.assertNotIn("release", self.msgs(r, "warnings"))
 
+    def code_repo_warnings(self, value, make_code=None, origin=None):
+        """check's warnings for project.code_repo_dir = value, with tmp/proj as the project and tmp/code beside it.
+
+        make_code(code, proj) runs after the project repo exists; HOME is tmp, so "~/code" is tmp/code.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            proj, code = Path(tmp) / "proj", Path(tmp) / "code"
+            proj.mkdir()
+            toml = GOOD_TOML.replace('project_id = "p1"\n', 'project_id = "p1"\ncode_repo_dir = %s\n' % json.dumps(value))
+            make_repo(proj, {"skill_router.toml": toml}, origin)
+            if make_code:
+                make_code(code, proj)
+            with mock.patch.dict(os.environ, {"HOME": tmp}):
+                r = run_check(proj)
+        self.assertTrue(r["ok"], r)
+        return [w for w in r["warnings"] if "code_repo_dir" in w]
+
+    def test_code_repo_dir_empty_is_one_repo(self):
+        self.assertEqual(self.code_repo_warnings(""), [])
+
+    def test_code_repo_dir_git_clone_is_fine(self):
+        clone = lambda d, _: (d.mkdir(), make_repo(d))  # noqa: E731
+        self.assertEqual(self.code_repo_warnings("../code", clone), [])
+        self.assertEqual(self.code_repo_warnings("~/code", clone), [])
+        other = lambda d, _: (d.mkdir(), make_repo(d, origin="https://github.com/o/code.git"))  # noqa: E731
+        self.assertEqual(self.code_repo_warnings("../code", other, origin="https://github.com/o/track.git"), [])
+
+    def test_code_repo_dir_missing_is_a_warning(self):
+        warnings = self.code_repo_warnings("../code")
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("does not exist", warnings[0])
+
+    def test_code_repo_dir_none_says_use_an_empty_string(self):
+        for value in ("none", " None "):
+            with self.subTest(value):
+                warnings = self.code_repo_warnings(value)
+                self.assertEqual(len(warnings), 1)
+                self.assertIn('empty string ""', warnings[0])
+
+    def test_code_repo_dir_not_a_git_clone_is_a_warning(self):
+        for value, make in [("../code", lambda d, _: d.mkdir()), ("docs", None), (".", None)]:
+            with self.subTest(value):
+                warnings = self.code_repo_warnings(value, make)
+                self.assertEqual(len(warnings), 1)
+                self.assertIn("not the root of a separate git clone", warnings[0])
+
+    def test_code_repo_dir_of_the_same_repository_is_a_warning(self):
+        url = "https://github.com/o/track.git"
+        same_origin = lambda d, _: (d.mkdir(), make_repo(d, origin=url))  # noqa: E731
+        worktree = lambda d, p: git(p, "worktree", "add", "-q", str(d))  # noqa: E731
+        for name, make, origin in [("worktree", worktree, None), ("same origin", same_origin, url)]:
+            with self.subTest(name):
+                warnings = self.code_repo_warnings("../code", make, origin)
+                self.assertEqual(len(warnings), 1)
+                self.assertIn("same repository as this one", warnings[0])
+
+    def test_relative_common_dirs_resolve_per_repo(self):
+        # git < 2.31 prints a relative ".git" for both repos; resolved against each repo they differ.
+        with tempfile.TemporaryDirectory() as tmp:
+            a, b = Path(tmp) / "a", Path(tmp) / "b"
+            out = {"rev-parse": ".git\n", "remote": ""}
+            with mock.patch.object(onboard, "_git", side_effect=lambda root, *args, **kw: out[args[0]]):
+                self.assertNotEqual(onboard._git_identity(a)[0], onboard._git_identity(b)[0])
+                self.assertEqual(str((a / ".git").resolve()), onboard._git_identity(a)[0])
+
+    def test_origin_urls_compare_as_host_owner_repo(self):
+        same = ["git@github.com:o/r.git", "git@github.com:o/r", "ssh://git@github.com/o/r.git",
+                "https://github.com/o/r.git", "https://GitHub.com/o/r/", "https://user@github.com/o/r"]
+        self.assertEqual({"github.com/o/r"}, {onboard._origin_key(u) for u in same})
+        self.assertNotEqual(onboard._origin_key("git@github.com:o/r.git"), onboard._origin_key("git@github.com:o/other"))
+        self.assertEqual("", onboard._origin_key(""))
+
+    def test_code_repo_dir_with_the_same_origin_over_ssh_is_a_warning(self):
+        clone = lambda d, _: (d.mkdir(), make_repo(d, origin="git@github.com:o/track.git"))  # noqa: E731
+        warnings = self.code_repo_warnings("../code", clone, origin="https://github.com/o/track")
+        self.assertEqual(1, len(warnings))
+        self.assertIn("same repository as this one", warnings[0])
+
     def test_invalid_prefix(self):
         for bad in ["N/A", "NA", "A B", ""]:
             r = self.check({"skill_router.toml": GOOD_TOML.replace('"HL"', '"%s"' % bad)})

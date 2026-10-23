@@ -103,10 +103,10 @@ Read `README.md` (unless it is still the YAB template README, titled "Multi-Agen
 <!-- onboard:project-keys
 name description architecture_summary issue_prefix git_host pm_project_url team_id project_id
 available_models ai_commit_trailer ai_tool_credit test_command integration_test_dir
-test_harness_file test_harness_class version_file version_field in_qa_paths keep_licence
+test_harness_file test_harness_class version_file version_field in_qa_paths keep_licence code_repo_dir
 -->
 
-Rules: every key gets a concrete single-line value; never leave a key empty. An empty value keeps its placeholder, and some placeholders sit in files outside the list above (experiments, backlog, implement and review skills), so `check` could then never go clean. But a bare `none` is pasted verbatim by most consumers (commit trailers, PR bodies, the backlog link, project-config tables), so it is only allowed for these keys, whose consumers read it naturally (the team and project ids have no consumer outside the router, which uses the project id only for Linear):
+Rules: every key except `code_repo_dir` (below) gets a concrete single-line value; never leave a key empty. An empty value keeps its placeholder, and some placeholders sit in files outside the list above (experiments, backlog, implement and review skills), so `check` could then never go clean. But a bare `none` is pasted verbatim by most consumers (commit trailers, PR bodies, the backlog link, project-config tables), so it is only allowed for these keys, whose consumers read it naturally (the team and project ids have no consumer outside the router, which uses the project id only for Linear):
 
 <!-- onboard:none-ok
 team_id project_id
@@ -118,6 +118,12 @@ Every other key needs a real value:
 name description architecture_summary issue_prefix git_host pm_project_url available_models
 ai_commit_trailer ai_tool_credit test_command integration_test_dir test_harness_file test_harness_class
 version_file version_field in_qa_paths
+-->
+
+One key stays empty unless the project is a tracking repo whose code lives in a sibling clone (`skills/shared/project-config.md`, "Repositories"); then it is that clone's path relative to this repo:
+
+<!-- onboard:empty-ok
+code_repo_dir
 -->
 
 Proposed defaults: `ai_commit_trailer` is the current agent's trailer line (for Claude, its `Co-Authored-By:` line from the session); `ai_tool_credit` is the matching credit line (for Claude Code, the "Generated with Claude Code" line with its link); `git_host` is the host of `origin` (with no origin, ask for `git_host` and `pm_project_url` instead of proposing them); `pm_project_url` is the Linear project URL, or the repo's `/issues` URL for GitHub Issues. For `integration_test_dir`, `test_harness_file`, `test_harness_class`, `version_file`, `version_field` and `in_qa_paths`, use what the repo really has; when it has none, use a phrase that reads correctly in the table, e.g. `none (no integration test harness)` or `none (no version file)`. `project_id` is a real id when `pm` is `"linear"`, else `none`; `available_models` is a comma-separated list and is what step 7 maps; `keep_licence` is `true` or `false` and `false` makes `apply` drop `LICENSE`.

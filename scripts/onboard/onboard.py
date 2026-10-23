@@ -75,7 +75,8 @@ PLACEHOLDER_FIELDS = {
 LIST_FIELDS = {"available_models", "in_qa_paths"}
 # Keys must be skill_router provider names (scripts/skill_router/providers): [providers].pm routes to that provider.
 PM_TOOLS = {"linear": "Linear", "github": "GitHub Issues"}
-PROJECT_KEYS = set(PLACEHOLDER_FIELDS.values()) | {"keep_licence"}
+# code_repo_dir: the sibling clone that receives code PRs in a two-repo setup; read by skills at runtime, not substituted.
+PROJECT_KEYS = set(PLACEHOLDER_FIELDS.values()) | {"keep_licence", "code_repo_dir"}
 # PM_TOOL from [providers].pm, EXPERIMENT_TOOL from [tools].feature_flags
 # (legacy [project].experiment_tool when there is no [tools] table).
 DERIVED_PLACEHOLDERS = {"PM_TOOL", "EXPERIMENT_TOOL"}
@@ -383,6 +384,49 @@ def _unknown_keys(table: Optional[Dict[str, Any]], section: str, keys: List[str]
     return ["skill_router.toml: unknown %s.%s ignored" % (section, k) for k in sorted(set(table or {}) - set(keys))]
 
 
+def _origin_key(url: str) -> str:
+    """host/owner/repo of a remote URL (ssh, scp-style or https; any .git suffix or trailing slash), "" for none."""
+    url = url.strip().rstrip("/")
+    if not url:
+        return ""
+    m = re.match(r"^[a-z][a-z0-9+.-]*://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.*)$", url, re.I) \
+        or re.match(r"^(?:[^@/]*@)?([^/:]+):(.*)$", url)
+    if not m:
+        return url
+    path = m.group(2).strip("/")
+    if path.endswith(".git"):
+        path = path[:-4]
+    return "%s/%s" % (m.group(1).lower(), path)
+
+
+def _git_identity(path: Path) -> Tuple[str, str]:
+    """(resolved common git dir, origin host/owner/repo): equal parts mean the same repository (a worktree or clone)."""
+    common = _git(path, "rev-parse", "--git-common-dir", allow_fail=True).strip()
+    origin = _git(path, "remote", "get-url", "origin", allow_fail=True)
+    return (str((path / common).resolve()) if common else "", _origin_key(origin))
+
+
+def _code_repo_warning(root: Path, value: Any) -> Optional[str]:
+    """A warning when project.code_repo_dir is set but is not the root of a separate git clone; empty means one repo."""
+    if not isinstance(value, str):
+        return "project.code_repo_dir must be a path string; two-repo sessions are off"
+    value = value.strip()
+    if not value:
+        return None
+    if value.lower() == "none":
+        return 'project.code_repo_dir is %r, which skills read as a path: use the empty string "" for one repo' % value
+    target = (root / Path(value).expanduser()).resolve()
+    if not target.is_dir():
+        return "project.code_repo_dir %r does not exist; two-repo sessions will fail until it is cloned" % value
+    top = _git(target, "rev-parse", "--show-toplevel", allow_fail=True).strip()
+    if not top or Path(top).resolve() != target or target == root.resolve():
+        return "project.code_repo_dir %r is not the root of a separate git clone" % value
+    mine, theirs = _git_identity(root), _git_identity(target)
+    if any(a and a == b for a, b in zip(mine, theirs)):
+        return "project.code_repo_dir %r is the same repository as this one (a worktree or clone of it)" % value
+    return None
+
+
 def _check_config(root: Path, errors: List[str], warnings: List[str]) -> str:
     if not (root / "skill_router.toml").is_file():
         errors.append("skill_router.toml missing")
@@ -404,6 +448,9 @@ def _check_config(root: Path, errors: List[str], warnings: List[str]) -> str:
                       "move a legacy [linear].project_id there)")
     elif pm == "linear" and re.match(r"none\b", str(project.get("project_id", "")).strip(), re.I):
         errors.append("project.project_id must be a real id when providers.pm is linear, not 'none'")
+    code_repo = _code_repo_warning(root, project.get("code_repo_dir", ""))
+    if code_repo:
+        warnings.append(code_repo)
     tools, tool_errors = _tools(table)
     errors.extend(tool_errors)
     warnings.extend(_unknown_keys(table, "tools", TOOL_KEYS))

@@ -55,6 +55,8 @@ Resolve the target file: `docs/knowledge/notes/{{ISSUE_PREFIX}}-XX.md` (using th
 
 Use today's date in `YYYY-MM-DD` format.
 
+Two-repo sessions: notes belong to the tracking repo (`skills/shared/project-config.md`, "Repositories").
+
 ### 4. Report back
 
 One line: *"Noted in `docs/knowledge/notes/{{ISSUE_PREFIX}}-XX.md`."*

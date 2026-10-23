@@ -103,6 +103,8 @@ git commit -m "meta: debrief {{ISSUE_PREFIX}}-XX — <short summary>"
 
 PR title: `meta: debrief {{ISSUE_PREFIX}}-XX — <short summary>`. Include the PR URL in the report (step 8).
 
+**Two-repo sessions** (`[project].code_repo_dir` set; empty means one repo, skip this): the knowledge-base entry goes onto the ticket's tracking branch `feature/{{ISSUE_PREFIX}}-XX-<desc>` in the tracking repo, the one `/ship` uses: create it from `origin/main` if absent, commit, and push. Approved skill/workflow edits go to the code repo, since a sync would overwrite them in the tracking repo: onto the code PR while it is open, else into a separate `meta:` PR there. Rules: `skills/shared/project-config.md`, "Repositories".
+
 ### 8. Report back
 
 Confirm: knowledge base updated at `docs/knowledge/notes/{{ISSUE_PREFIX}}-XX.md`, list any workflow/skill files changed (or "no file changes").

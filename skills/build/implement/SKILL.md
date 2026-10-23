@@ -15,6 +15,8 @@ The project management tool is **{{PM_TOOL}}**. The Git host is **{{GIT_HOST}}**
 1. Read `CLAUDE.local.md` for local binary paths and environment settings.
 2. Read `CLAUDE.md` and `docs/ARCHITECTURE.md` to orient yourself before touching any code.
 
+**Two-repo sessions** (`[project].code_repo_dir` set; empty means one repo, skip this): Workflow steps 3–12 (branch to PR) run in the code repo with its own test, format and lint commands; the PR is the code PR. Workflow steps 1–2, 13 and 14 stay in the tracking repo, and step 14 posts the code PR's URL. Step 15's reviews target the code PR (`-R <code-slug>`). Rules: `skills/shared/project-config.md`, "Repositories".
+
 ---
 
 ## Workflow
@@ -138,7 +140,7 @@ git push -u origin <branch-name>
 | GitLab | `glab mr create --title "<type>: <summary>" --description "..."` |
 | Bitbucket | `bb pr create` or use the Bitbucket REST API |
 
-PR/MR body template:
+PR/MR body template (two-repo: replace `Closes {{ISSUE_PREFIX}}-XX` with `Part of <tracking-slug>#N`):
 
 @skills/build/implement/resources/pr-body-template.md
 

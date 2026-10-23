@@ -131,6 +131,10 @@ behaviour beyond a literal value, it is not trivial — use the full workflow in
 14. Clear the context now that the ticket is fully shipped, before starting a new ticket.
 15. A new ticket may be picked up while the previous one is still being verified.
 
+**Two-repo sessions** (`skill_router.toml` `[project].code_repo_dir` set; empty means one repo, skip this): each
+ticket has a code PR in the code repo and a tracking PR (CHANGELOG, BACKLOG, notes) in the tracking repo, where the
+session runs. Routing: `skills/shared/project-config.md`, "Repositories".
+
 For tickets whose approved plan contains more than one production work unit (WU1+), see
 `docs/workflows/MULTI_WU.md` — it adds pre-implementation WU types (Research-WU, Scenario-WU,
 Checklist-WU), branch/PR-per-WU rules, `[wip]` CHANGELOG tagging, and the WU cycle that repeats

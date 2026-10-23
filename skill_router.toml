@@ -29,6 +29,9 @@ test_harness_class = ""
 version_file = ""
 version_field = ""
 in_qa_paths = ""
+# Two-repo sessions only: path (relative to this repo) to the sibling clone that receives code PRs, e.g.
+# "../app". Empty: one repo, nothing changes (skills/shared/project-config.md, "Repositories").
+code_repo_dir = ""
 # false: apply deletes LICENSE (the project is not MIT-licensed like the template).
 keep_licence = true
 
