@@ -590,6 +590,12 @@ class PrepareReleaseTest(unittest.TestCase):
         # The missing-table / empty-value rule lives once in project-config.md.
         self.assertNotRegex(text, r"(?i)(missing|no) `\[release\]` table|empty value")
 
+    def test_supplied_marks_go_through_the_script(self):
+        text = self.SKILL.read_text(encoding="utf-8")
+        for step in ("## 5.", "## 6."):
+            self.assertIn("--mark", text.split(step)[1].split("\n## ")[0], step)
+        self.assertNotRegex(text, r"(?i)yourself \(MAJOR > MINOR > PATCH\)|edit those lines")
+
     def test_protected_branch_opens_a_release_pr_and_never_merges(self):
         text = self.SKILL.read_text(encoding="utf-8")
         self.assertIn("release/vX.Y.Z", text)

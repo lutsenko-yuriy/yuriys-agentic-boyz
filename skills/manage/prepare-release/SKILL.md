@@ -36,7 +36,7 @@ Inputs: the user's selection and their "go". Nothing is written, committed, tagg
 `changelog.py unreleased docs/CHANGELOG.md` returns the `[user]`/`[app]` lines (`line`, `text`, `tags`, `mark`, `flags`) and the count of other lines.
 
 - No app lines: say there is nothing to release and stop.
-- A line without a mark (an adopter's unmigrated line): show `?` in the table and ask the user for `MAJOR`, `MINOR` or `PATCH`. Do not fail. The mark is written to the line in step 6, with the release commit.
+- A line without a mark (an adopter's unmigrated line): show `?` in the table and ask the user for `MAJOR`, `MINOR` or `PATCH`. Do not fail. The supplied marks are passed as `--mark <line>=<MARK>` to `propose` (step 5) and `cut` (step 6), which writes them to the lines.
 
 Show one table and ask the user to accept all, reject all, or deselect lines or flags:
 
@@ -58,7 +58,7 @@ Draft one bullet per selected `[user]` line, then check each against `skills/man
 
 ## 5. Summary and "go"
 
-Propose the version with `changelog.py propose docs/CHANGELOG.md --current <previous> --keep <deselected line numbers>`. If the user supplied marks in step 3, it refuses those lines as unmarked: take the highest mark among the selected lines and the user's answers yourself (MAJOR > MINOR > PATCH) and step `<previous>` the same way. The user may override the version with any `X.Y.Z` greater than the previous one.
+Propose the version with `changelog.py propose docs/CHANGELOG.md --current <previous> --keep <deselected line numbers> --mark <line>=<MARK>…` (one `--mark` value per mark the user supplied in step 3). The user may override the version with any `X.Y.Z` greater than the previous one.
 
 Show one summary screen:
 
@@ -78,14 +78,13 @@ Ask: say "go" to release, or change anything above. Re-show the summary after ev
 
 ## 6. Release commit
 
-1. If the user supplied marks in step 3, edit those lines in `docs/CHANGELOG.md` to end with the mark.
-2. Write the release-note bullets to a temp file (empty for zero bullets), then run
-   `changelog.py cut docs/CHANGELOG.md X.Y.Z --keep <deselected line numbers> --notes-file <temp file>`
-   (line numbers from step 3; adding a mark does not move a line).
-3. `changelog.py lint docs/CHANGELOG.md` must pass.
-4. Set `[project].version_field` in `[project].version_file` to `X.Y.Z`. Keep the build number if the field has one.
-5. Version gates: for each selected flag, add `X.Y.Z` as its gate in the symbol named by `[release].version_gates`, in the form the existing entries use. Skip when it is `none` or the user chose "proceed without gates".
-6. Stage only these files and commit with `git commit -F <file>`, message `chore: release vX.Y.Z`.
+1. Write the release-note bullets to a temp file (empty for zero bullets), then run
+   `changelog.py cut docs/CHANGELOG.md X.Y.Z --keep <deselected line numbers> --mark <line>=<MARK>… --notes-file <temp file>`
+   with the line numbers from step 3 and the same `--mark` values as step 5; it writes the supplied marks to their lines.
+2. `changelog.py lint docs/CHANGELOG.md` must pass.
+3. Set `[project].version_field` in `[project].version_file` to `X.Y.Z`. Keep the build number if the field has one.
+4. Version gates: for each selected flag, add `X.Y.Z` as its gate in the symbol named by `[release].version_gates`, in the form the existing entries use. Skip when it is `none` or the user chose "proceed without gates".
+5. Stage only these files and commit with `git commit -F <file>`, message `chore: release vX.Y.Z`.
 
 ## 7. Push
 

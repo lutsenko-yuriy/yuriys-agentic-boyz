@@ -351,6 +351,33 @@ class CutTest(unittest.TestCase):
                           [], "", "2026-10-23")
 
 
+class MarkTest(unittest.TestCase):
+    TEXT = doc("- #1: a [meta]", "- #2: b [user]", "- #3: c [app] PATCH")
+
+    def test_supplied_mark_counts_in_propose(self):
+        n = line_of(self.TEXT, "#2:")
+        self.assertEqual("1.1.0", changelog.propose(self.TEXT, "1.0.0", marks={n: "MINOR"}))
+        self.assertEqual("1.0.1", changelog.propose(self.TEXT, "1.0.0", [n], {n: "MINOR"}))
+
+    def test_supplied_mark_is_written_by_cut(self):
+        n = line_of(self.TEXT, "#2:")
+        out = changelog.cut(self.TEXT, "1.1.0", [], "", "2026-10-23", {n: "MINOR"})
+        self.assertIn("- #2: b [user] MINOR\n", out)
+        kept = changelog.cut(self.TEXT, "1.0.1", [n], "", "2026-10-23", {n: "MAJOR"})
+        self.assertIn("## [Unreleased]\n- #2: b [user] MAJOR\n", kept)
+        self.assertEqual([], changelog.lint(kept))
+
+    def test_refusals(self):
+        for marks, needle in [
+            ({line_of(MarkTest.TEXT, "#1:"): "PATCH"}, "not an app-changing"),
+            ({line_of(MarkTest.TEXT, "#3:"): "MINOR"}, "already"),
+            ({line_of(MarkTest.TEXT, "#2:"): "minor"}, "MAJOR, MINOR or PATCH"),
+        ]:
+            with self.subTest(marks), self.assertRaises(changelog.ChangelogError) as cm:
+                changelog.propose(self.TEXT, "1.0.0", marks=marks)
+            self.assertIn(needle, str(cm.exception))
+
+
 class NotesTest(unittest.TestCase):
     def test_round_trip(self):
         out = changelog.cut(CutTest.TEXT, "2.0.0", [], "\n- One.\n- Two.\n\n", "2026-10-23")
@@ -421,6 +448,17 @@ class CliTest(unittest.TestCase):
         data = path.read_bytes()
         self.assertIn(b"## [2.0.0]", data)
         self.assertNotIn(b"\n", data.replace(b"\r\n", b""))
+
+    def test_mark_option(self):
+        path = self.write(MarkTest.TEXT)
+        n = str(line_of(MarkTest.TEXT, "#2:"))
+        self.assertEqual((0, {"version": "2.0.0"}), self.run_main("propose", path, "--current", "1.0.0", "--mark", n + "=MAJOR"))
+        code, out = self.run_main("propose", path, "--current", "1.0.0", "--mark", n + ":MAJOR")
+        self.assertEqual(1, code)
+        self.assertIn("LINE=MARK", out["error"])
+        code, out = self.run_main("cut", path, "1.1.0", "--mark", n + "=MINOR", "--date", "2026-10-23")
+        self.assertEqual(0, code, out)
+        self.assertIn("- #2: b [user] MINOR", Path(path).read_text(encoding="utf-8"))
 
     def test_cut_refusal_leaves_the_file(self):
         path = self.write(CutTest.TEXT)

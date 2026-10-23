@@ -4,9 +4,10 @@
 Usage:
     python3 scripts/changelog/changelog.py lint <path>                         # grammar findings
     python3 scripts/changelog/changelog.py unreleased <path>                   # app-changing [Unreleased] lines
-    python3 scripts/changelog/changelog.py propose <path> --current X.Y.Z [--keep N ...]  # from the highest mark
+    python3 scripts/changelog/changelog.py propose <path> --current X.Y.Z [--keep N ...] [--mark N=MARK ...]
+        # next version from the highest mark among the lines not kept; --mark supplies a missing mark
     python3 scripts/changelog/changelog.py latest <path>                       # latest released X.Y.Z, or null
-    python3 scripts/changelog/changelog.py cut <path> X.Y.Z [--keep N ...] [--notes-file F] [--date YYYY-MM-DD]
+    python3 scripts/changelog/changelog.py cut <path> X.Y.Z [--keep N ...] [--mark N=MARK ...] [--notes-file F] [--date D]
         # release commit content: every [Unreleased] line except the kept app lines (file line numbers, as
         # `unreleased` reports them) moves under a new `## [X.Y.Z] — date` heading with `### Release notes`
         # (from F, omitted when empty) and `### Changes`; comments and subheadings stay, and an `## [Unreleased]` left empty is removed
@@ -207,11 +208,40 @@ def _selected(app: List[Dict[str, Any]], keep: Sequence[int]) -> List[Dict[str, 
     return selected
 
 
-def propose(text: str, current: str, keep: Sequence[int] = ()) -> str:
-    """The next version from the highest mark among the app lines not kept back."""
+def apply_marks(text: str, marks: Dict[int, str]) -> str:
+    """text with each mark appended to its unmarked app line (file line number -> MARK); lines do not move."""
+    if not marks:
+        return text
+    app = {e["line"]: e for e in unreleased(text)["app"]}
+    lines = text.splitlines(True)
+    for n, mark in sorted(marks.items()):
+        if mark not in MARKS:
+            raise ChangelogError("mark %r for line %d: use MAJOR, MINOR or PATCH" % (mark, n))
+        if n not in app:
+            raise ChangelogError("line %d is not an app-changing [Unreleased] line" % n)
+        if app[n]["mark"] is not None:
+            raise ChangelogError("line %d already has mark %s" % (n, app[n]["mark"]))
+        body = lines[n - 1].rstrip("\r\n")
+        lines[n - 1] = body.rstrip() + " " + mark + lines[n - 1][len(body):]
+    return "".join(lines)
+
+
+def _parse_marks(raw: Sequence[str]) -> Dict[int, str]:
+    marks: Dict[int, str] = {}
+    for item in raw:
+        m = re.match(r"^(\d+)=(\S+)$", item)
+        if not m:
+            raise ChangelogError("--mark takes LINE=MARK, not %r" % item)
+        marks[int(m.group(1))] = m.group(2)
+    return marks
+
+
+def propose(text: str, current: str, keep: Sequence[int] = (), marks: Optional[Dict[int, str]] = None) -> str:
+    """The next version from the highest mark among the app lines not kept back; marks fill unmarked lines."""
     m = VERSION_RE.match(current)
     if not m:
         raise ChangelogError("current version %r is not X.Y.Z" % current)
+    text = apply_marks(text, marks or {})
     selected = _selected(unreleased(text)["app"], keep)
     top = max(MARKS.index(e["mark"]) for e in selected)
     major, minor, patch = (int(g) for g in m.groups())
@@ -244,8 +274,10 @@ def _section_end(lines: List[str], start: int) -> int:
     return len(lines)
 
 
-def cut(text: str, version: str, keep: List[int], notes_text: str, date: str) -> str:
-    """The CHANGELOG after releasing version; keep holds file line numbers of app lines that stay in [Unreleased]."""
+def cut(text: str, version: str, keep: List[int], notes_text: str, date: str,
+        marks: Optional[Dict[int, str]] = None) -> str:
+    """The CHANGELOG after releasing version; keep holds file line numbers of app lines that stay in [Unreleased],
+    marks the marks the user supplied for unmarked app lines (written to those lines)."""
     m = VERSION_RE.match(version)
     if not m:
         raise ChangelogError("version %r is not X.Y.Z" % version)
@@ -257,6 +289,7 @@ def cut(text: str, version: str, keep: List[int], notes_text: str, date: str) ->
     if previous and tuple(int(g) for g in m.groups()) <= tuple(int(g) for g in previous.split(".")):
         raise ChangelogError("version %s must be greater than the latest release %s" % (version, previous))
     try:
+        text = apply_marks(text, marks or {})
         app = unreleased(text)["app"]
     except ChangelogError as e:
         if e.findings:
@@ -314,6 +347,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             p.add_argument("version")
         if name in ("propose", "cut"):
             p.add_argument("--keep", type=int, nargs="*", default=[])
+            p.add_argument("--mark", nargs="*", default=[], help="LINE=MARK for an unmarked app line")
         if name == "cut":
             p.add_argument("--notes-file")
             p.add_argument("--date", default=datetime.date.today().isoformat())
@@ -336,7 +370,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.cmd == "unreleased":
             result = unreleased(text)
         elif args.cmd == "propose":
-            result = {"version": propose(text, args.current, args.keep)}
+            result = {"version": propose(text, args.current, args.keep, _parse_marks(args.mark))}
         elif args.cmd == "latest":
             result = {"version": latest(text)}
         elif args.cmd == "notes":
@@ -349,7 +383,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 notes_text = Path(args.notes_file).read_text(encoding="utf-8") if args.notes_file else ""
             except (OSError, UnicodeDecodeError) as e:
                 raise ChangelogError(str(e))
-            new = cut(text, args.version, args.keep, notes_text, args.date)
+            new = cut(text, args.version, args.keep, notes_text, args.date, _parse_marks(args.mark))
             with open(args.path, "w", encoding="utf-8", newline="") as f:
                 f.write(new)
             result = {"version": args.version, "moved": len(_scan(text)[1]) - len(set(args.keep)),
