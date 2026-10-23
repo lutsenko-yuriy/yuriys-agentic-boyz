@@ -15,6 +15,7 @@ Usage:
 
 Line grammar (skills/manage/ship/resources/changelog-tags.md):
     - <ID>: <summary> (PR #N) [tag]... <MAJOR|MINOR|PATCH> flags: <name>, <name>   (mark and flags as the rules require)
+    The optional PR reference may also be `(PR owner/repo#N)` (two-repo sessions); it is part of the summary.
 
 Only a CHANGELOG with the format marker line `<!-- changelog-format: yab-1 -->` above the first `---` is linted (a second
 marker anywhere is a finding); without it `lint` prints a notice and exits 0, and `unreleased`/`propose` still parse

@@ -404,6 +404,27 @@ class NotesTest(unittest.TestCase):
         self.assertEqual("- A.", changelog.notes(text, "1.0.0"))
 
 
+class CodeRepoPrReferenceTest(unittest.TestCase):
+    """Two-repo sessions cite the code repo's PR as (PR owner/repo#N); every command treats it like (PR #N)."""
+    LINES = ("- YD-3: a (PR o/code-repo#7) [meta]", "- YD-4: b (PR o/code.repo#8) [user] MINOR flags: f1",
+             "- YD-5: c (PR #9) [app] PATCH")
+    TEXT = doc(*LINES, released=RELEASED)
+
+    def test_lint_accepts_it(self):
+        self.assertEqual([], errors(self.TEXT))
+
+    def test_unreleased_reports_it(self):
+        result = changelog.unreleased(self.TEXT)
+        self.assertEqual(list(self.LINES[1:]), [e["text"] for e in result["app"]])
+        self.assertEqual(1, result["non_app"])
+
+    def test_cut_moves_it_and_notes_leave_it_out(self):
+        out = changelog.cut(self.TEXT, "1.1.0", [], "- Better things.\n", "2026-10-23")
+        self.assertIn("### Changes\n%s\n\n## [1.0.0]" % "\n".join(self.LINES), out)
+        self.assertEqual([], changelog.lint(out))
+        self.assertEqual("- Better things.", changelog.notes(out, "1.1.0"))
+
+
 class CliTest(unittest.TestCase):
     def run_main(self, *argv):
         out = io.StringIO()
