@@ -311,6 +311,11 @@ class CutTest(unittest.TestCase):
                 self.cut(**kwargs)
             self.assertIn(needle, str(cm.exception), kwargs)
 
+    def test_heading_with_trailing_whitespace(self):
+        text = INTRO + "## [Unreleased] \t\n- #1: a [user] PATCH\n"
+        out = changelog.cut(text, "0.0.1", [], "", "2026-10-23")
+        self.assertEqual(INTRO + "## [0.0.1] — 2026-10-23\n\n### Changes\n- #1: a [user] PATCH\n", out)
+
     def test_missing_mark_on_a_kept_line_is_fine(self):
         text = doc("- #1: a [user] PATCH", "- #2: b [app]")
         out = changelog.cut(text, "0.0.1", [line_of(text, "#2:")], "", "2026-10-23")

@@ -266,7 +266,7 @@ def cut(text: str, version: str, keep: List[int], notes_text: str, date: str) ->
 
     raw = text.splitlines()
     blanked = _blank_comments(text)
-    start = blanked.index(UNRELEASED)
+    start = next(i for i, ln in enumerate(blanked) if ln.rstrip() == UNRELEASED)  # as _scan matches it
     end = _section_end(blanked, start)
     entries = {n - 1 for n, _, _ in _scan(text)[1]}
     moved = [raw[i] for i in range(start + 1, end) if i in entries and i + 1 not in keep]
