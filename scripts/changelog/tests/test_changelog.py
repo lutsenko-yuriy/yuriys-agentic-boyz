@@ -367,6 +367,17 @@ class MarkTest(unittest.TestCase):
         self.assertIn("## [Unreleased]\n- #2: b [user] MAJOR\n", kept)
         self.assertEqual([], changelog.lint(kept))
 
+    def test_mark_goes_before_a_trailing_comment(self):
+        text = doc("- A-3: x [app] <!-- c -->", "- A-4: y [user]  <!-- d --> <!-- e -->", "- A-5: z [app] <!-- open")
+        text = text.replace("<!-- open\n", "<!-- open\nstill comment -->\n")
+        marks = {line_of(text, "A-3"): "MINOR", line_of(text, "A-4"): "PATCH", line_of(text, "A-5"): "MAJOR"}
+        out = changelog.apply_marks(text, marks)
+        self.assertIn("- A-3: x [app] MINOR <!-- c -->\n", out)
+        self.assertIn("- A-4: y [user] PATCH  <!-- d --> <!-- e -->\n", out)
+        self.assertIn("- A-5: z [app] MAJOR <!-- open\n", out)
+        self.assertEqual([], changelog.lint(out))
+        self.assertEqual("2.0.0", changelog.propose(text, "1.0.0", marks=marks))
+
     def test_refusals(self):
         for marks, needle in [
             ({line_of(MarkTest.TEXT, "#1:"): "PATCH"}, "not an app-changing"),

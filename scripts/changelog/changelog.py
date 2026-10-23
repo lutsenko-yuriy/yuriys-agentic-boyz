@@ -221,9 +221,22 @@ def apply_marks(text: str, marks: Dict[int, str]) -> str:
             raise ChangelogError("line %d is not an app-changing [Unreleased] line" % n)
         if app[n]["mark"] is not None:
             raise ChangelogError("line %d already has mark %s" % (n, app[n]["mark"]))
-        body = lines[n - 1].rstrip("\r\n")
-        lines[n - 1] = body.rstrip() + " " + mark + lines[n - 1][len(body):]
+        line = lines[n - 1]
+        body = line.rstrip("\r\n")
+        content = _without_trailing_comments(body)
+        lines[n - 1] = content + " " + mark + line[len(content):]
     return "".join(lines)
+
+
+def _without_trailing_comments(body: str) -> str:
+    """body minus trailing HTML comments (closed, or open to the next line) and whitespace: where a mark goes."""
+    content = body.rstrip()
+    while True:
+        start = content.rfind("<!--")
+        close = content.find("-->", start + 4) if start >= 0 else -1
+        if start < 0 or close not in (-1, len(content) - 3):
+            return content
+        content = content[:start].rstrip()
 
 
 def _parse_marks(raw: Sequence[str]) -> Dict[int, str]:
