@@ -384,11 +384,26 @@ def _unknown_keys(table: Optional[Dict[str, Any]], section: str, keys: List[str]
     return ["skill_router.toml: unknown %s.%s ignored" % (section, k) for k in sorted(set(table or {}) - set(keys))]
 
 
+def _origin_key(url: str) -> str:
+    """host/owner/repo of a remote URL (ssh, scp-style or https; any .git suffix or trailing slash), "" for none."""
+    url = url.strip().rstrip("/")
+    if not url:
+        return ""
+    m = re.match(r"^[a-z][a-z0-9+.-]*://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.*)$", url, re.I) \
+        or re.match(r"^(?:[^@/]*@)?([^/:]+):(.*)$", url)
+    if not m:
+        return url
+    path = m.group(2).strip("/")
+    if path.endswith(".git"):
+        path = path[:-4]
+    return "%s/%s" % (m.group(1).lower(), path)
+
+
 def _git_identity(path: Path) -> Tuple[str, str]:
-    """(resolved common git dir, origin URL): equal parts mean the same repository (a worktree or another clone)."""
-    common = _git(path, "rev-parse", "--path-format=absolute", "--git-common-dir", allow_fail=True).strip()
-    origin = _git(path, "remote", "get-url", "origin", allow_fail=True).strip()
-    return (str(Path(common).resolve()) if common else "", origin)
+    """(resolved common git dir, origin host/owner/repo): equal parts mean the same repository (a worktree or clone)."""
+    common = _git(path, "rev-parse", "--git-common-dir", allow_fail=True).strip()
+    origin = _git(path, "remote", "get-url", "origin", allow_fail=True)
+    return (str((path / common).resolve()) if common else "", _origin_key(origin))
 
 
 def _code_repo_warning(root: Path, value: Any) -> Optional[str]:

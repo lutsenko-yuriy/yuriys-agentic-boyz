@@ -440,6 +440,28 @@ class CheckTests(unittest.TestCase):
                 self.assertEqual(len(warnings), 1)
                 self.assertIn("same repository as this one", warnings[0])
 
+    def test_relative_common_dirs_resolve_per_repo(self):
+        # git < 2.31 prints a relative ".git" for both repos; resolved against each repo they differ.
+        with tempfile.TemporaryDirectory() as tmp:
+            a, b = Path(tmp) / "a", Path(tmp) / "b"
+            out = {"rev-parse": ".git\n", "remote": ""}
+            with mock.patch.object(onboard, "_git", side_effect=lambda root, *args, **kw: out[args[0]]):
+                self.assertNotEqual(onboard._git_identity(a)[0], onboard._git_identity(b)[0])
+                self.assertEqual(str((a / ".git").resolve()), onboard._git_identity(a)[0])
+
+    def test_origin_urls_compare_as_host_owner_repo(self):
+        same = ["git@github.com:o/r.git", "git@github.com:o/r", "ssh://git@github.com/o/r.git",
+                "https://github.com/o/r.git", "https://GitHub.com/o/r/", "https://user@github.com/o/r"]
+        self.assertEqual({"github.com/o/r"}, {onboard._origin_key(u) for u in same})
+        self.assertNotEqual(onboard._origin_key("git@github.com:o/r.git"), onboard._origin_key("git@github.com:o/other"))
+        self.assertEqual("", onboard._origin_key(""))
+
+    def test_code_repo_dir_with_the_same_origin_over_ssh_is_a_warning(self):
+        clone = lambda d, _: (d.mkdir(), make_repo(d, origin="git@github.com:o/track.git"))  # noqa: E731
+        warnings = self.code_repo_warnings("../code", clone, origin="https://github.com/o/track")
+        self.assertEqual(1, len(warnings))
+        self.assertIn("same repository as this one", warnings[0])
+
     def test_invalid_prefix(self):
         for bad in ["N/A", "NA", "A B", ""]:
             r = self.check({"skill_router.toml": GOOD_TOML.replace('"HL"', '"%s"' % bad)})
