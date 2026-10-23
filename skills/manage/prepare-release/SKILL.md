@@ -108,9 +108,11 @@ Ask: say "go" to release, or change anything above. Re-show the summary after ev
 
 Only when selected lines name flags and `[tools].feature_flags` is not `none`.
 
-- If this session has an integration for that tool (an MCP server, or an authenticated CLI), switch each selected flag on through it, confirming each flag with the user first.
-- Otherwise, list the flags as a human step ("switch these on in <tool>"), and wait for "done".
-- Without a release job, add: switch them on once the release is published.
+Switch flags on yourself only after the release job succeeded: the step 8.2 command exited 0 and ran the release to the end, or, when it only starts a run (e.g. a workflow dispatch), the run finished successfully (watched to the end, or confirmed by the user). A flag switched on earlier would enable the feature before the build carrying it is out.
+
+- Job succeeded and this session has an integration for that tool (an MCP server, or an authenticated CLI): switch each selected flag on through it, confirming each flag with the user first.
+- Job succeeded, no integration: give the flags as a manual step ("switch these on in <tool>") and wait for "done".
+- Job failed, still running unconfirmed, or `[release].job` is `none` or not recorded: switch nothing. Give the flags as a manual step: "switch these on in <tool> once vX.Y.Z is published", and wait for "done".
 
 ## 10. Report
 

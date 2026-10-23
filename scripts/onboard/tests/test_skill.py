@@ -596,6 +596,12 @@ class PrepareReleaseTest(unittest.TestCase):
             self.assertIn("--mark", text.split(step)[1].split("\n## ")[0], step)
         self.assertNotRegex(text, r"(?i)yourself \(MAJOR > MINOR > PATCH\)|edit those lines")
 
+    def test_flags_switch_on_only_after_the_job_succeeded(self):
+        step = self.SKILL.read_text(encoding="utf-8").split("## 9.")[1].split("\n## ")[0]
+        self.assertIn("only after the release job succeeded", step)
+        self.assertRegex(step, r"(?i)failed.*still running.*`none`")
+        self.assertIn("manual step", step)
+
     def test_protected_branch_opens_a_release_pr_and_never_merges(self):
         text = self.SKILL.read_text(encoding="utf-8")
         self.assertIn("release/vX.Y.Z", text)
