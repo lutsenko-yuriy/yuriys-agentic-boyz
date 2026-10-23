@@ -384,18 +384,31 @@ def _unknown_keys(table: Optional[Dict[str, Any]], section: str, keys: List[str]
     return ["skill_router.toml: unknown %s.%s ignored" % (section, k) for k in sorted(set(table or {}) - set(keys))]
 
 
+def _git_identity(path: Path) -> Tuple[str, str]:
+    """(resolved common git dir, origin URL): equal parts mean the same repository (a worktree or another clone)."""
+    common = _git(path, "rev-parse", "--path-format=absolute", "--git-common-dir", allow_fail=True).strip()
+    origin = _git(path, "remote", "get-url", "origin", allow_fail=True).strip()
+    return (str(Path(common).resolve()) if common else "", origin)
+
+
 def _code_repo_warning(root: Path, value: Any) -> Optional[str]:
     """A warning when project.code_repo_dir is set but is not the root of a separate git clone; empty means one repo."""
     if not isinstance(value, str):
         return "project.code_repo_dir must be a path string; two-repo sessions are off"
-    if not value.strip():
+    value = value.strip()
+    if not value:
         return None
-    target = (root / value.strip()).resolve()
+    if value.lower() == "none":
+        return 'project.code_repo_dir is %r, which skills read as a path: use the empty string "" for one repo' % value
+    target = (root / Path(value).expanduser()).resolve()
     if not target.is_dir():
         return "project.code_repo_dir %r does not exist; two-repo sessions will fail until it is cloned" % value
     top = _git(target, "rev-parse", "--show-toplevel", allow_fail=True).strip()
     if not top or Path(top).resolve() != target or target == root.resolve():
         return "project.code_repo_dir %r is not the root of a separate git clone" % value
+    mine, theirs = _git_identity(root), _git_identity(target)
+    if any(a and a == b for a, b in zip(mine, theirs)):
+        return "project.code_repo_dir %r is the same repository as this one (a worktree or clone of it)" % value
     return None
 
 
