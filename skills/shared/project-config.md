@@ -2,7 +2,7 @@
 
 Read this file to resolve all project-specific constants referenced in skill instructions.
 Project identity (name, issue prefix, git host, PM tool, test/version settings) lives in `skill_router.toml`
-(`[project]`, `[providers]`, `[tools]`). Skills stay unchanged.
+(`[project]`, `[providers]`, `[tools]`, `[release]`). Skills stay unchanged.
 
 ## Tech stack
 
@@ -19,6 +19,17 @@ What the project uses for each role, recorded by `/onboard` in `skill_router.tom
 | `[tools].feature_flags` | Feature flags: kill-switches and remote config; also the experiment tool |
 
 A missing `[tools]` table (onboarded before these were recorded) or an empty value (e.g. `""` from a merged template `skill_router.toml`) means the same: assume a tool exists (the previous behaviour). Consumers act only on `none`; any other state proceeds as if the tool exists.
+
+## Release
+
+How `/prepare-release` publishes a release, recorded by `/onboard` in `skill_router.toml` `[release]`: a value, or `none`. The release flow and the term "version gate" are defined in `docs/VERSIONING.md` (Release flow).
+
+| Key | Value |
+|---|---|
+| `[release].job` | One shell command that starts the release job after the `vX.Y.Z` tag is pushed, with `{version}` (`X.Y.Z`) and `{tag}` (`vX.Y.Z`) substituted, e.g. `gh workflow run release.yml -f tag={tag}`. `none`: no job; publishing is up to the user. |
+| `[release].version_gates` | Where the project records the minimum app version each feature flag needs, as a file and symbol, e.g. `lib/config/flags.dart (Flags.releaseVersions)`. `none`: the project keeps no gates. |
+
+A missing `[release]` table (onboarded before these were recorded) or an empty value means "not recorded", which differs from `[tools]`: there is no command to assume. `/prepare-release` then stops after the tag and says publishing is up to the user, and when flagged lines are selected it asks for the gate location or an explicit "proceed without gates". `version_gates = none` with flagged lines selected gets the same risk warning in the release summary.
 
 ## Project management
 
@@ -51,7 +62,7 @@ A missing `[tools]` table (onboarded before these were recorded) or an empty val
 |---|---|
 | Version file | `{{VERSION_FILE}}` (e.g. `pubspec.yaml`, `package.json`) |
 | Version field | `{{VERSION_FIELD}}` (e.g. `version: X.Y.Z`) |
-| Manual vs automated | Bump version name manually; CI manages build numbers — never touch them |
+| Who bumps it | Only `/prepare-release`, with the version the user confirms; CI manages build numbers — never touch them |
 
 ## In QA path patterns
 

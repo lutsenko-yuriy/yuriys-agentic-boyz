@@ -135,6 +135,10 @@ description = "d"
 issue_prefix = "HL"
 project_id = "p1"
 
+[release]
+job = "gh workflow run release.yml -f tag={tag}"
+version_gates = "lib/flags.dart (Flags.releaseVersions)"
+
 [tools]
 analytics = "Firebase"
 logging = "none"
@@ -328,6 +332,57 @@ class CheckTests(unittest.TestCase):
                 r = self.check({".yab-template": YAB_SENTINEL, "skill_router.toml": toml}, origin=YAB_ORIGIN)
                 self.assertTrue(r["ok"], r)
                 self.assertNotIn("tools", self.msgs(r, "warnings"))
+
+    def test_missing_release_table_is_a_legacy_warning_not_an_error(self):
+        toml = GOOD_TOML.replace(GOOD_TOML[GOOD_TOML.index("[release]"):GOOD_TOML.index("[tools]")], "")
+        r = self.check({"skill_router.toml": toml})
+        self.assertTrue(r["ok"], r)
+        self.assertIn(onboard.RELEASE_LEGACY_WARNING, self.msgs(r, "warnings"))
+        self.assertNotIn("[release]", self.msgs(self.check(), "warnings"))
+
+    def test_unknown_release_keys_are_warned(self):
+        r = self.check({"skill_router.toml": GOOD_TOML.replace("[release]\n", '[release]\njobs = "x"\n')})
+        self.assertTrue(r["ok"], r)
+        self.assertIn("skill_router.toml: unknown release.jobs ignored", self.msgs(r, "warnings"))
+
+    def test_release_values_validated(self):
+        def with_job(line):
+            return GOOD_TOML.replace('job = "gh workflow run release.yml -f tag={tag}"\n', line)
+
+        for line, expected in [
+            ("", "release.job is empty (a command, or none)"),
+            ('job = "  "\n', "release.job is empty (a command, or none)"),
+            ("job = 5\n", "release.job must be a string"),
+            ('job = "a\\nb"\n', "release.job must be a single line"),
+            ('job = "{{PROJECT_NAME}}"\n', "release.job must not contain a {{PLACEHOLDER}}"),
+            ('job = "none (manual)"\n', "release.job must be exactly none"),
+        ]:
+            with self.subTest(line):
+                r = self.check({"skill_router.toml": with_job(line)})
+                self.assertFalse(r["ok"])
+                self.assertIn(expected, self.msgs(r))
+        r = self.check({"skill_router.toml": GOOD_TOML.replace('version_gates = "lib/flags.dart (Flags.releaseVersions)"', 'version_gates = ""')})
+        self.assertIn("release.version_gates is empty (a file and symbol, or none)", self.msgs(r))
+
+    def test_release_normalised(self):
+        release, errors = onboard._release({"job": " echo {tag} ", "version_gates": "NONE"})
+        self.assertEqual(errors, [])
+        self.assertEqual(release, {"job": "echo {tag}", "version_gates": "none"})
+        self.assertEqual(onboard._release(None), (None, []))
+
+    def test_release_must_be_a_table(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_repo(tmp, {"skill_router.toml": 'release = "none"\n' + GOOD_TOML.split("[release]")[0]})
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+                self.assertEqual(onboard.main(["--root", str(root), "check"]), 3)
+            self.assertIn("[release]", err.getvalue())
+
+    def test_template_mode_suppresses_release_errors_and_warning(self):
+        for toml in ('[providers]\n\n[release]\njob = ""\n', "[providers]\n"):
+            with self.subTest(toml):
+                r = self.check({".yab-template": YAB_SENTINEL, "skill_router.toml": toml}, origin=YAB_ORIGIN)
+                self.assertTrue(r["ok"], r)
+                self.assertNotIn("release", self.msgs(r, "warnings"))
 
     def test_invalid_prefix(self):
         for bad in ["N/A", "NA", "A B", ""]:

@@ -45,6 +45,7 @@ This project describes what each skill needs from a model using two axes: **Effo
 | `experiment` | FOCUSED | ARCHITECTURAL | Design a product experiment: hypothesis, metrics, variant spec |
 | `implement` | FOCUSED | TACTICAL | Implement a scoped work unit correctly and completely |
 | `ship` | RAPID | TACTICAL | Structured housekeeping: close issues, add a marked CHANGELOG line, update docs, merge |
+| `prepare-release` | FOCUSED | TACTICAL | Release dialog: select lines, draft notes, version, tag, job and flags; runs inline in the session |
 | `summarize` | RAPID | MECHANICAL | Structured PM data fetch and format |
 
 ---

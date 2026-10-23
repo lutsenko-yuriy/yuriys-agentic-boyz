@@ -50,7 +50,7 @@ behaviour beyond a literal value, it is not trivial — use the full workflow in
       Invoke the plan skill for {{ISSUE_PREFIX}}-XX: <issue title>
       ```
       Produces a structured plan (dependencies, models, UI changes, test strategy, ordered phases, work units).
-   4. **Feature toggle.** For features introducing new user-facing behaviour: consider a remote-config-style kill-switch (default on) so the feature can be disabled without a release if a critical regression surfaces after shipping. If added, document it before writing any code. Skip this gate when `skill_router.toml` `[tools].feature_flags` is `none`, and say so (no feature-flag tool recorded); any other state follows `skills/shared/project-config.md` (Tools).
+   4. **Feature toggle.** For features introducing new user-facing behaviour: consider a remote-config-style kill-switch (default on) so the feature can be disabled without a release if a critical regression surfaces after shipping. If added, document it before writing any code; `/ship` names it on the CHANGELOG line (`flags:`), and `/prepare-release` adds its version gate and switches it on when the feature is released. Skip this gate when `skill_router.toml` `[tools].feature_flags` is `none`, and say so (no feature-flag tool recorded); any other state follows `skills/shared/project-config.md` (Tools).
    5. **Create the feature branch** from the latest default branch, before writing any code. Always include the ticket number after `feature/`:
       ```
       git fetch origin

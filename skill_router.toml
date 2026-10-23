@@ -39,6 +39,13 @@ analytics = ""
 logging = ""
 feature_flags = ""
 
+[release]
+# How /prepare-release publishes (skills/shared/project-config.md, "Release"). Empty in the template; /onboard fills it in.
+# job: one shell command that starts the release job; {version} and {tag} are substituted. Or "none".
+# version_gates: where the project records which version a feature flag needs, as "<file> (<symbol>)". Or "none".
+job = ""
+version_gates = ""
+
 [llm]
 lmstudio_base = "http://localhost:1234/v1"
 

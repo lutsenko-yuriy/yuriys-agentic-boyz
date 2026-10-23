@@ -241,6 +241,34 @@ class ConfigAgreementTest(unittest.TestCase):
                 self.assertIn("skills/shared/project-config.md", text)
                 self.assertNotRegex(text, r"(?i)(missing|no) `\[tools\]` table|empty value")
 
+    def test_release_keys_match(self):
+        keys = (block("release-keys", SKILL.read_text(encoding="utf-8")) or "").split()
+        self.assertEqual(onboard.RELEASE_KEYS, keys)
+
+    def test_onboard_asks_release_questions_after_tools(self):
+        step = SKILL.read_text(encoding="utf-8").split("### 3.")[1].split("### 4.")[0]
+        self.assertLess(step.index("[tools]"), step.index("[release]"))
+        for key in onboard.RELEASE_KEYS:
+            self.assertIn("`%s`" % key, step)
+        self.assertRegex(step, r"`none` for `version_gates` without asking")
+
+    def test_release_rule_covers_missing_table_and_empty_value(self):
+        config = (ROOT / "skills/shared/project-config.md").read_text(encoding="utf-8")
+        rule = config.split("## Release", 1)[1].split("\n## ", 1)[0]
+        for key in onboard.RELEASE_KEYS:
+            self.assertIn("`[release].%s`" % key, rule)
+        self.assertIn("missing `[release]` table", rule)
+        self.assertIn("empty value", rule)
+        self.assertIn("docs/VERSIONING.md", rule)
+        self.assertIn("{tag}", rule)
+        self.assertIn("{version}", rule)
+
+    def test_version_management_points_to_prepare_release(self):
+        config = (ROOT / "skills/shared/project-config.md").read_text(encoding="utf-8")
+        section = config.split("## Version management", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("/prepare-release", section)
+        self.assertNotRegex(section, r"(?i)bump version name manually")
+
     @template_only
     def test_analytics_catalogue_names_its_key(self):
         # Adopters own docs/ANALYTICS_EVENTS.md (their event catalogue), so only the shipped template is checked.
@@ -345,6 +373,7 @@ def write_config(root, empty=()):
     lines = ['[providers]', 'pm = "github"', 'vcs = "github"', "", "[project]"]
     lines += ['%s = %s' % (k, json.dumps(v)) for k, v in sorted(project.items())]
     lines += ["", "[tools]"] + ['%s = %s' % (k, json.dumps(v)) for k, v in tools.items()]
+    lines += ["", "[release]"] + ['%s = "none"' % k for k in onboard.RELEASE_KEYS]
     (root / "skill_router.toml").write_text("\n".join(lines) + "\n")
 
 
@@ -528,6 +557,95 @@ class ShipChangelogTest(unittest.TestCase):
         for mark in changelog.MARKS:
             self.assertIn(mark, table)
 
+
+    def test_ship_prefers_merge_commits_and_falls_back(self):
+        text = (self.SHIP / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed", text)
+        merge, squash, rebase = (text.index("gh pr merge {number} --%s --delete-branch" % m)
+                                 for m in ("merge", "squash", "rebase"))
+        self.assertLess(merge, squash)
+        self.assertLess(squash, rebase)
+        self.assertRegex(text, r"`glab mr merge[^`]*`.*GitLab project's own merge (method|setting)")
+        self.assertRegex(text, r"(?i)first-parent.*every (merge )?method")
+
+
+class PrepareReleaseTest(unittest.TestCase):
+    DIR = ROOT / "skills" / "manage" / "prepare-release"
+    SKILL = DIR / "SKILL.md"
+
+    def text(self):
+        return text_of([self.SKILL] + sorted((self.DIR / "resources").glob("*.md")))
+
+    def test_frontmatter(self):
+        head = self.SKILL.read_text(encoding="utf-8").split("---")[1]
+        for line in ["name: prepare-release", "effort: FOCUSED", "reasoning: TACTICAL", "needs_session_tools: true"]:
+            self.assertIn(line, head)
+
+    def test_named_changelog_subcommands_exist(self):
+        named = set(re.findall(r"changelog\.py (\w+)", self.text()))
+        self.assertLessEqual({"lint", "unreleased", "propose", "latest", "cut"}, named)
+        self.assertLessEqual(named, set(changelog.SUBCOMMANDS))
+
+    def test_names_its_config_keys_and_points_to_project_config(self):
+        text = self.SKILL.read_text(encoding="utf-8")
+        for key in onboard.RELEASE_KEYS:
+            self.assertIn("[release].%s" % key, text)
+        self.assertIn("[tools].feature_flags", text)
+        self.assertIn("skills/shared/project-config.md", text)
+        # The missing-table / empty-value rule lives once in project-config.md.
+        self.assertNotRegex(text, r"(?i)(missing|no) `\[release\]` table|empty value")
+
+    def test_supplied_marks_go_through_the_script(self):
+        text = self.SKILL.read_text(encoding="utf-8")
+        for step in ("## 5.", "## 6."):
+            self.assertIn("--mark", text.split(step)[1].split("\n## ")[0], step)
+        self.assertNotRegex(text, r"(?i)yourself \(MAJOR > MINOR > PATCH\)|edit those lines")
+
+    def test_flags_switch_on_only_after_the_job_succeeded(self):
+        step = self.SKILL.read_text(encoding="utf-8").split("## 9.")[1].split("\n## ")[0]
+        self.assertIn("only after the release job succeeded", step)
+        self.assertRegex(step, r"(?i)failed.*still running.*`none`")
+        self.assertIn("manual step", step)
+
+    def test_rejected_push_names_the_branch_reset(self):
+        step = self.SKILL.read_text(encoding="utf-8").split("## 7.")[1].split("\n## ")[0]
+        self.assertIn("`git branch -f <default> origin/<default>`", step)
+        self.assertRegex(step, r"(?i)safe")
+        self.assertLess(step.index("git push -u origin release/vX.Y.Z"), step.index("git branch -f"))
+
+    def test_protected_branch_opens_a_release_pr_and_never_merges(self):
+        text = self.SKILL.read_text(encoding="utf-8")
+        self.assertIn("release/vX.Y.Z", text)
+        self.assertRegex(text, r"(?i)never merge")
+        self.assertNotRegex(text, r"(gh pr merge|glab mr merge)")
+
+    def test_waits_for_go_and_uses_the_notes_checklist(self):
+        text = self.SKILL.read_text(encoding="utf-8")
+        self.assertIn('"go"', text)
+        self.assertIn("skills/manage/prepare-release/resources/notes-checklist.md", text)
+        self.assertTrue((self.DIR / "resources" / "notes-checklist.md").is_file())
+
+    def test_stub_and_registrations(self):
+        stub = (ROOT / ".claude" / "commands" / "prepare-release.md").read_text(encoding="utf-8")
+        self.assertIn("skills/manage/prepare-release/SKILL.md", stub)
+        self.assertIn("$ARGUMENTS", stub)
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("| skills/manage/prepare-release/SKILL.md |", agents)
+        self.assertIn("/prepare-release", agents.split("## Versioning", 1)[1].split("\n## ", 1)[0])
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("prepare-release", readme.split("## Skill workflow", 1)[1].split("\n## ", 1)[0])
+        self.assertRegex(readme, r"`manage` \([^)]*prepare-release")
+        self.assertRegex((ROOT / "docs" / "MODEL_TIERS.md").read_text(encoding="utf-8"),
+                         r"\| `prepare-release` \| FOCUSED \| TACTICAL \|")
+        tier_map = (ROOT / "skills" / "configure" / "calibrate" / "resources" / "skill-tier-map.md").read_text(encoding="utf-8")
+        row = next(ln for ln in tier_map.splitlines() if ln.startswith("| FOCUSED | TACTICAL |"))
+        self.assertIn("`prepare-release`", row)
+
+    def test_feature_toggle_gate_names_the_changelog_flag(self):
+        gate = (ROOT / "docs" / "workflows" / "FEATURE.md").read_text(encoding="utf-8").split("4. **Feature toggle.**")[1]
+        gate = gate.split("\n   5. ")[0]
+        self.assertIn("flags:", gate)
+        self.assertIn("version gate", gate)
 
 if __name__ == "__main__":
     unittest.main()

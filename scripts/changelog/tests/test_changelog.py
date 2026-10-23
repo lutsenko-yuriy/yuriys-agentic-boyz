@@ -234,9 +234,174 @@ class ProposeTest(unittest.TestCase):
         with self.assertRaises(changelog.ChangelogError):
             changelog.propose(doc("- #1: x [meta]"), "1.0.0")
 
+    def test_kept_lines_do_not_count(self):
+        text = doc("- #1: x [user] MAJOR", "- #2: y [app] PATCH", "- #3: z [app]")
+        keep = [line_of(text, "#1:"), line_of(text, "#3:")]
+        self.assertEqual("1.0.1", changelog.propose(text, "1.0.0", keep))
+        with self.assertRaises(changelog.ChangelogError):
+            changelog.propose(text, "1.0.0", keep + [line_of(text, "#2:")])
+        with self.assertRaises(changelog.ChangelogError):
+            changelog.propose(text, "1.0.0", [line_of(text, "#1:")])  # #3 is selected and unmarked
+
     def test_bad_current_version_refuses(self):
         with self.assertRaises(changelog.ChangelogError):
             changelog.propose(doc("- #1: x [user] MINOR"), "v1.0")
+
+
+RELEASED = "\n## [1.0.0] — 2026-01-02\n\n### Changes\n- #9: old [user] MAJOR\n"
+
+
+def line_of(text, needle):
+    return next(n for n, ln in enumerate(text.splitlines(), 1) if needle in ln)
+
+
+class CutTest(unittest.TestCase):
+    TEXT = doc("### Added / Changed / Fixed", "- #1: a [meta]", "- #2: b (PR #3) [user] MINOR flags: f1",
+               "- #4: c [app] PATCH", "- #5: d [user] MAJOR", released=RELEASED)
+
+    def cut(self, text=None, version="1.1.0", keep=(), notes="- Better things.\n", date="2026-10-23"):
+        return changelog.cut(text or self.TEXT, version, list(keep), notes, date)
+
+    def test_everything_moves_and_an_emptied_unreleased_is_removed(self):
+        text = doc("- #1: a [user] PATCH", released=RELEASED)
+        out = self.cut(text=text, version="2.0.0")
+        self.assertTrue(out.startswith(INTRO + "## [2.0.0] — 2026-10-23\n"), out)
+        self.assertNotIn("## [Unreleased]", out.replace(FOOTER, ""))
+
+    def test_non_entry_lines_stay_in_unreleased(self):
+        text = doc("<!-- keep this note\n- #0: commented out [user] PATCH -->", "### Added / Changed / Fixed",
+                   "- #1: a [user] PATCH", released=RELEASED)
+        out = self.cut(text=text, version="2.0.0")
+        self.assertTrue(out.startswith(INTRO + "## [Unreleased]\n<!-- keep this note\n- #0: commented out [user] PATCH -->\n"
+                                       "### Added / Changed / Fixed\n\n## [2.0.0] — 2026-10-23\n"), out)
+        self.assertIn("### Changes\n- #1: a [user] PATCH\n\n## [1.0.0]", out)
+        self.assertEqual([], changelog.lint(out))
+
+    def test_everything_moves(self):
+        out = self.cut(version="2.0.0")
+        self.assertTrue(out.startswith(INTRO + "## [Unreleased]\n### Added / Changed / Fixed\n\n## [2.0.0]"), out)
+        self.assertIn("## [2.0.0] — 2026-10-23\n\n### Release notes\n- Better things.\n\n### Changes\n"
+                      "- #1: a [meta]\n- #2: b (PR #3) [user] MINOR flags: f1\n- #4: c [app] PATCH\n"
+                      "- #5: d [user] MAJOR\n\n## [1.0.0] — 2026-01-02", out)
+        self.assertTrue(out.endswith(FOOTER))
+        self.assertEqual([], changelog.lint(out))
+
+    def test_kept_lines_stay_in_unreleased_and_non_app_lines_move(self):
+        keep = [line_of(self.TEXT, "#2:"), line_of(self.TEXT, "#5:")]
+        out = self.cut(keep=keep)
+        self.assertTrue(out.startswith(INTRO + "## [Unreleased]\n### Added / Changed / Fixed\n"
+                                       "- #2: b (PR #3) [user] MINOR flags: f1\n- #5: d [user] MAJOR\n\n"
+                                       "## [1.1.0] — 2026-10-23\n"), out)
+        self.assertIn("### Changes\n- #1: a [meta]\n- #4: c [app] PATCH\n\n## [1.0.0]", out)
+        self.assertEqual([], changelog.lint(out))
+        self.assertEqual(["- #2: b (PR #3) [user] MINOR flags: f1", "- #5: d [user] MAJOR"],
+                         [e["text"] for e in changelog.unreleased(out)["app"]])
+
+    def test_no_notes_means_no_release_notes_section(self):
+        out = self.cut(version="2.0.0", notes="\n  \n")
+        self.assertIn("## [2.0.0] — 2026-10-23\n\n### Changes\n", out)
+        self.assertNotIn("### Release notes", out)
+
+    def test_first_release_and_unreleased_before_the_rule(self):
+        text = INTRO + "## [Unreleased]\n- #1: a [user] PATCH\n\n---\n"
+        out = changelog.cut(text, "0.0.1", [], "", "2026-10-23")
+        self.assertEqual(INTRO + "## [0.0.1] — 2026-10-23\n\n### Changes\n- #1: a [user] PATCH\n\n---\n", out)
+
+    def test_refusals(self):
+        for kwargs, needle in [
+            ({"version": "1.0.0"}, "1.0.0"),
+            ({"version": "0.9.0"}, "greater"),
+            ({"version": "v1.1.0"}, "X.Y.Z"),
+            ({"date": "23.10.2026"}, "YYYY-MM-DD"),
+            ({"keep": [line_of(self.TEXT, "#1:")]}, "not an app-changing"),
+            ({"keep": [999]}, "not an app-changing"),
+            ({"keep": [line_of(self.TEXT, n) for n in ("#2:", "#4:", "#5:")]}, "nothing to release"),
+            ({"text": doc("- #1: a [meta]")}, "nothing to release"),
+            ({"text": doc("- #1: a [user]")}, "mark"),
+            ({"text": doc("- #1: a [bogus]")}, "lint"),
+            ({"text": doc("- #1: a [user] PATCH").replace("yab-1", "yab-9")}, "yab-9"),
+        ]:
+            with self.subTest(kwargs), self.assertRaises(changelog.ChangelogError) as cm:
+                self.cut(**kwargs)
+            self.assertIn(needle, str(cm.exception), kwargs)
+
+    def test_heading_with_trailing_whitespace(self):
+        text = INTRO + "## [Unreleased] \t\n- #1: a [user] PATCH\n"
+        out = changelog.cut(text, "0.0.1", [], "", "2026-10-23")
+        self.assertEqual(INTRO + "## [0.0.1] — 2026-10-23\n\n### Changes\n- #1: a [user] PATCH\n", out)
+
+    def test_crlf_line_endings_are_kept(self):
+        text = self.TEXT.replace("\n", "\r\n")
+        out = changelog.cut(text, "2.0.0", [line_of(text, "#5:")], "- A.\n", "2026-10-23")
+        self.assertNotIn("\n", out.replace("\r\n", ""))
+        self.assertEqual(self.cut(version="2.0.0", keep=[line_of(self.TEXT, "#5:")], notes="- A.\n"),
+                         out.replace("\r\n", "\n"))
+
+    def test_missing_mark_on_a_kept_line_is_fine(self):
+        text = doc("- #1: a [user] PATCH", "- #2: b [app]")
+        out = changelog.cut(text, "0.0.1", [line_of(text, "#2:")], "", "2026-10-23")
+        self.assertIn("## [Unreleased]\n- #2: b [app]\n", out)
+
+    def test_latest_ignores_pre_releases_and_reads_short_versions(self):
+        self.assertEqual("1.0.0", changelog.latest(self.TEXT))
+        self.assertIsNone(changelog.latest(doc("- #1: a [meta]")))
+        self.assertEqual("1.2.0", changelog.latest(INTRO + "## [2.0.0-rc.1] — 2026-01-03\n## [1.2] — 2026-01-02\n"))
+        with self.assertRaises(changelog.ChangelogError):
+            changelog.cut(INTRO + "## [Unreleased]\n- #1: a [user] PATCH\n\n## [1.2] — 2026-01-02\n", "1.2.0",
+                          [], "", "2026-10-23")
+
+
+class MarkTest(unittest.TestCase):
+    TEXT = doc("- #1: a [meta]", "- #2: b [user]", "- #3: c [app] PATCH")
+
+    def test_supplied_mark_counts_in_propose(self):
+        n = line_of(self.TEXT, "#2:")
+        self.assertEqual("1.1.0", changelog.propose(self.TEXT, "1.0.0", marks={n: "MINOR"}))
+        self.assertEqual("1.0.1", changelog.propose(self.TEXT, "1.0.0", [n], {n: "MINOR"}))
+
+    def test_supplied_mark_is_written_by_cut(self):
+        n = line_of(self.TEXT, "#2:")
+        out = changelog.cut(self.TEXT, "1.1.0", [], "", "2026-10-23", {n: "MINOR"})
+        self.assertIn("- #2: b [user] MINOR\n", out)
+        kept = changelog.cut(self.TEXT, "1.0.1", [n], "", "2026-10-23", {n: "MAJOR"})
+        self.assertIn("## [Unreleased]\n- #2: b [user] MAJOR\n", kept)
+        self.assertEqual([], changelog.lint(kept))
+
+    def test_mark_goes_before_a_trailing_comment(self):
+        text = doc("- A-3: x [app] <!-- c -->", "- A-4: y [user]  <!-- d --> <!-- e -->", "- A-5: z [app] <!-- open")
+        text = text.replace("<!-- open\n", "<!-- open\nstill comment -->\n")
+        marks = {line_of(text, "A-3"): "MINOR", line_of(text, "A-4"): "PATCH", line_of(text, "A-5"): "MAJOR"}
+        out = changelog.apply_marks(text, marks)
+        self.assertIn("- A-3: x [app] MINOR <!-- c -->\n", out)
+        self.assertIn("- A-4: y [user] PATCH  <!-- d --> <!-- e -->\n", out)
+        self.assertIn("- A-5: z [app] MAJOR <!-- open\n", out)
+        self.assertEqual([], changelog.lint(out))
+        self.assertEqual("2.0.0", changelog.propose(text, "1.0.0", marks=marks))
+
+    def test_refusals(self):
+        for marks, needle in [
+            ({line_of(MarkTest.TEXT, "#1:"): "PATCH"}, "not an app-changing"),
+            ({line_of(MarkTest.TEXT, "#3:"): "MINOR"}, "already"),
+            ({line_of(MarkTest.TEXT, "#2:"): "minor"}, "MAJOR, MINOR or PATCH"),
+        ]:
+            with self.subTest(marks), self.assertRaises(changelog.ChangelogError) as cm:
+                changelog.propose(self.TEXT, "1.0.0", marks=marks)
+            self.assertIn(needle, str(cm.exception))
+
+
+class NotesTest(unittest.TestCase):
+    def test_round_trip(self):
+        out = changelog.cut(CutTest.TEXT, "2.0.0", [], "\n- One.\n- Two.\n\n", "2026-10-23")
+        self.assertEqual("- One.\n- Two.", changelog.notes(out, "2.0.0"))
+        self.assertEqual("", changelog.notes(out, "1.0.0"))
+
+    def test_unknown_version_refuses(self):
+        with self.assertRaises(changelog.ChangelogError):
+            changelog.notes(CutTest.TEXT, "3.0.0")
+
+    def test_section_ends_at_next_subheading_and_comments_are_skipped(self):
+        text = INTRO + "## [1.0.0] — 2026-01-02\n### Release notes\n- A.\n<!-- hidden -->\n### Changes\n- #1: x [user] PATCH\n"
+        self.assertEqual("- A.", changelog.notes(text, "1.0.0"))
 
 
 class CliTest(unittest.TestCase):
@@ -272,6 +437,65 @@ class CliTest(unittest.TestCase):
         code, out = self.run_main("propose", self.write(doc("- #1: x [user]")), "--current", "1.0.0")
         self.assertEqual(1, code)
         self.assertIn("error", out)
+
+    def test_cut_writes_the_file(self):
+        path = self.write(CutTest.TEXT)
+        notes = self.write("- Better things.\n")
+        code, out = self.run_main("cut", path, "1.1.0", "--keep", str(line_of(CutTest.TEXT, "#5:")),
+                                  "--notes-file", notes, "--date", "2026-10-23")
+        self.assertEqual(0, code, out)
+        self.assertEqual({"version": "1.1.0", "moved": 3, "kept": 1}, out)
+        text = Path(path).read_text(encoding="utf-8")
+        self.assertIn("## [1.1.0] — 2026-10-23", text)
+        self.assertEqual("- Better things.", changelog.notes(text, "1.1.0"))
+
+    def test_cut_keeps_crlf_on_disk(self):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        path = Path(d.name) / "CHANGELOG.md"
+        path.write_bytes(CutTest.TEXT.replace("\n", "\r\n").encode("utf-8"))
+        code, out = self.run_main("cut", str(path), "2.0.0", "--date", "2026-10-23")
+        self.assertEqual(0, code, out)
+        data = path.read_bytes()
+        self.assertIn(b"## [2.0.0]", data)
+        self.assertNotIn(b"\n", data.replace(b"\r\n", b""))
+
+    def test_mark_option(self):
+        path = self.write(MarkTest.TEXT)
+        n = str(line_of(MarkTest.TEXT, "#2:"))
+        self.assertEqual((0, {"version": "2.0.0"}), self.run_main("propose", path, "--current", "1.0.0", "--mark", n + "=MAJOR"))
+        code, out = self.run_main("propose", path, "--current", "1.0.0", "--mark", n + ":MAJOR")
+        self.assertEqual(1, code)
+        self.assertIn("LINE=MARK", out["error"])
+        code, out = self.run_main("cut", path, "1.1.0", "--mark", n + "=MINOR", "--date", "2026-10-23")
+        self.assertEqual(0, code, out)
+        self.assertIn("- #2: b [user] MINOR", Path(path).read_text(encoding="utf-8"))
+
+    def test_cut_refusal_leaves_the_file(self):
+        path = self.write(CutTest.TEXT)
+        code, out = self.run_main("cut", path, "1.0.0")
+        self.assertEqual(1, code)
+        self.assertIn("error", out)
+        self.assertEqual(CutTest.TEXT, Path(path).read_text(encoding="utf-8"))
+
+    def test_latest(self):
+        self.assertEqual((0, {"version": "1.0.0"}), self.run_main("latest", self.write(CutTest.TEXT)))
+        self.assertEqual((0, {"version": None}), self.run_main("latest", self.write(doc("- #1: a [meta]"))))
+
+    def test_notes_prints_plain_text(self):
+        text = changelog.cut(CutTest.TEXT, "2.0.0", [], "- One.\n", "2026-10-23")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = changelog.main(["notes", self.write(text), "2.0.0"])
+        self.assertEqual((0, "- One.\n"), (code, out.getvalue()))
+        code, out = self.run_main("notes", self.write(text), "9.9.9")
+        self.assertEqual(1, code)
+        self.assertIn("error", out)
+
+    def test_propose_with_keep(self):
+        text = doc("- #1: x [user] MAJOR", "- #2: y [app] PATCH")
+        out = self.run_main("propose", self.write(text), "--current", "1.0.0", "--keep", str(line_of(text, "#1:")))
+        self.assertEqual((0, {"version": "1.0.1"}), out)
 
     def test_unmarked_lint_prints_a_one_line_notice(self):
         out = io.StringIO()
