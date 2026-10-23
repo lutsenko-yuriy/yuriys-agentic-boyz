@@ -281,7 +281,8 @@ def cut(text: str, version: str, keep: List[int], notes_text: str, date: str) ->
         release += [RELEASE_NOTES] + notes_lines + [""]
     release += [CHANGES] + moved + ([""] if raw[end:] else [])
     out = raw[:start] + head + release + raw[end:]
-    return "\n".join(out) + "\n"
+    eol = "\r\n" if "\r\n" in text else "\n"  # a CRLF file stays CRLF
+    return eol.join(out) + eol
 
 
 def notes(text: str, version: str) -> str:
@@ -318,7 +319,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             p.add_argument("--date", default=datetime.date.today().isoformat())
     args = parser.parse_args(argv)
     try:
-        text = Path(args.path).read_text(encoding="utf-8")
+        with open(args.path, encoding="utf-8", newline="") as f:  # newline="": keep CRLF for cut
+            text = f.read()
     except (OSError, UnicodeDecodeError) as e:
         print(json.dumps({"error": str(e)}))
         return 1
@@ -348,7 +350,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             except (OSError, UnicodeDecodeError) as e:
                 raise ChangelogError(str(e))
             new = cut(text, args.version, args.keep, notes_text, args.date)
-            Path(args.path).write_text(new, encoding="utf-8")
+            with open(args.path, "w", encoding="utf-8", newline="") as f:
+                f.write(new)
             result = {"version": args.version, "moved": len(_scan(text)[1]) - len(set(args.keep)),
                       "kept": len(set(args.keep))}
     except ChangelogError as e:

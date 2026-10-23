@@ -330,6 +330,13 @@ class CutTest(unittest.TestCase):
         out = changelog.cut(text, "0.0.1", [], "", "2026-10-23")
         self.assertEqual(INTRO + "## [0.0.1] — 2026-10-23\n\n### Changes\n- #1: a [user] PATCH\n", out)
 
+    def test_crlf_line_endings_are_kept(self):
+        text = self.TEXT.replace("\n", "\r\n")
+        out = changelog.cut(text, "2.0.0", [line_of(text, "#5:")], "- A.\n", "2026-10-23")
+        self.assertNotIn("\n", out.replace("\r\n", ""))
+        self.assertEqual(self.cut(version="2.0.0", keep=[line_of(self.TEXT, "#5:")], notes="- A.\n"),
+                         out.replace("\r\n", "\n"))
+
     def test_missing_mark_on_a_kept_line_is_fine(self):
         text = doc("- #1: a [user] PATCH", "- #2: b [app]")
         out = changelog.cut(text, "0.0.1", [line_of(text, "#2:")], "", "2026-10-23")
@@ -403,6 +410,17 @@ class CliTest(unittest.TestCase):
         text = Path(path).read_text(encoding="utf-8")
         self.assertIn("## [1.1.0] — 2026-10-23", text)
         self.assertEqual("- Better things.", changelog.notes(text, "1.1.0"))
+
+    def test_cut_keeps_crlf_on_disk(self):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        path = Path(d.name) / "CHANGELOG.md"
+        path.write_bytes(CutTest.TEXT.replace("\n", "\r\n").encode("utf-8"))
+        code, out = self.run_main("cut", str(path), "2.0.0", "--date", "2026-10-23")
+        self.assertEqual(0, code, out)
+        data = path.read_bytes()
+        self.assertIn(b"## [2.0.0]", data)
+        self.assertNotIn(b"\n", data.replace(b"\r\n", b""))
 
     def test_cut_refusal_leaves_the_file(self):
         path = self.write(CutTest.TEXT)
