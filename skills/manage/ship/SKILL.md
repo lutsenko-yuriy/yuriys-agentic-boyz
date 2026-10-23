@@ -16,7 +16,7 @@ The project management tool is **{{PM_TOOL}}**. The issue identifier prefix is *
 
 Run all steps in order. Each step must succeed before moving to the next.
 
-**Two-repo sessions** (`[project].code_repo_dir` set; empty means one repo, skip this): steps 1–4 write in the tracking repo, and the CHANGELOG line cites `(PR <code-slug>#N)`. Step 5 splits in two, see there. Rules: `skills/shared/project-config.md`, "Repositories".
+**Two-repo sessions** (`[project].code_repo_dir` set; empty means one repo, skip this): `PR #N` is the code PR, in the code repo; every `gh pr` call on it takes `-R <code-slug>` (step 4: `gh pr diff <N> -R <code-slug>`). Step 1 closes the tracking issue named in the code PR's `Part of` line. Steps 2–4 write in the tracking repo, and the CHANGELOG line cites `(PR <code-slug>#N)`. Step 5 differs, see there. Rules: `skills/shared/project-config.md`, "Repositories".
 
 ### 1. Close the linked issue(s)
 
@@ -97,7 +97,13 @@ Then merge the PR/MR on your Git host. Prefer a merge commit; use another method
 
 The merge method does not affect releases: `/prepare-release` finds the release commit with a first-parent lookup, which works with every merge method.
 
-**Two-repo sessions:** (a) merge the code PR in the code repo, with the merge-method check run against it (`gh repo view <code-slug> ...`, `gh pr merge ... -R <code-slug>`). (b) Commit the tracking files above onto the ticket's tracking branch `feature/{{ISSUE_PREFIX}}-XX-<desc>` (create it from `origin/main` if missing), push, open the tracking PR and merge it the same way.
+**Two-repo sessions**, in this order:
+
+1. Commit the tracking files above onto the ticket's tracking branch `feature/{{ISSUE_PREFIX}}-XX-<desc>` in the tracking repo (create it from `origin/main` if missing), push, and open the tracking PR, titled `chore: CHANGELOG for {{ISSUE_PREFIX}}-XX`, body `Part of #N` (step 1 already closed the issue).
+2. Merge the code PR, with the merge-method check run against the code repo (`gh repo view <code-slug> ...`, `gh pr merge <N> -R <code-slug> ...`).
+3. Only after that succeeds, merge the tracking PR the same way in the tracking repo.
+
+If step 3 fails after the code PR merged, re-run only step 3; never repeat steps 1–4, which would add a second CHANGELOG line.
 
 ### 6. Report back
 
