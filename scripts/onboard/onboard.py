@@ -238,15 +238,6 @@ def _template_readme(root: Path) -> bool:
     return first == "# " + TEMPLATE_README_TITLE
 
 
-def _empty_changelog(text: str) -> str:
-    """YAB's own entries dropped: the intro through the first `---` rule, then whatever follows the last one."""
-    lines = text.splitlines(keepends=True)
-    rules = [i for i, ln in enumerate(lines) if ln.strip() == "---"]
-    if len(rules) < 2:
-        return text
-    return "".join(lines[:rules[0] + 1] + lines[rules[-1] + 1:])
-
-
 def _template_tokens(text: str) -> List[str]:
     text = re.sub(r"^(```|~~~).*?^\1[^\n]*$|(`+)[^`].*?\2(?!`)", "", _strip_comments(text),
                   flags=re.DOTALL | re.MULTILINE)
@@ -621,21 +612,6 @@ def apply(root: Path) -> Dict[str, Any]:
         left = sorted(set(PLACEHOLDER_RE.findall(new)))
         if left:
             unresolved[rel] = left
-    # A template clone's CHANGELOG is YAB's history. Only a YAB sentinel qualifies, and unstaged edits are kept (a
-    # staged-only file still counts: the ZIP flow has no commit yet); once the sentinel is gone the project's own stay.
-    changelog_reset = False
-    if sentinel_deleted and _yab_sentinel(root) and CHANGELOG in tracked:
-        try:
-            text = _read_regular(root / CHANGELOG)
-        except (UnicodeDecodeError, OSError):
-            text = None
-        if text is not None and _empty_changelog(text) != text:
-            if _git(root, "diff", "--name-only", "--", CHANGELOG):
-                warnings.append("%s has unstaged edits, so it was not emptied: remove the template's entries once "
-                                "onboarding is done" % CHANGELOG)
-            else:
-                edits[CHANGELOG] = _empty_changelog(text)
-                changelog_reset = True
     for rel, text in edits.items():
         _write_atomic(root / rel, text)
     if mcp == "":
@@ -650,7 +626,6 @@ def apply(root: Path) -> Dict[str, Any]:
         os.unlink(sentinel)
     return {
         "changed": sorted(edits),
-        "changelog_reset": changelog_reset,
         "unresolved": unresolved,
         "mcp": "deleted" if mcp == "" else "unchanged" if mcp is None else "written",
         "license_deleted": license_deleted,

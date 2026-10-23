@@ -460,11 +460,11 @@ class TemplateFlowTest(unittest.TestCase):
 
     @template_only
     def test_new_project_gets_an_empty_changelog_and_must_replace_the_readme(self):
-        # Template-only: an onboarded project's CHANGELOG and README are already its own.
+        # Template-only: YAB ships an empty CHANGELOG; an onboarded project's CHANGELOG and README are its own.
         with tempfile.TemporaryDirectory() as tmp:
             root = make_clone(tmp, "https://github.com/me/proj.git", sentinel=True)
             write_config(root)
-            self.assertTrue(onboard.apply(root)["changelog_reset"])
+            onboard.apply(root)
             text = (root / "docs/CHANGELOG.md").read_text()
             self.assertNotIn("## [Unreleased]", onboard._strip_comments(text))  # the footer comment shows the format
             self.assertIn(changelog.MARKER, text.splitlines())  # a new project's CHANGELOG is linted from the start
