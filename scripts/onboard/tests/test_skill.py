@@ -558,10 +558,15 @@ class ShipChangelogTest(unittest.TestCase):
             self.assertIn(mark, table)
 
 
-    def test_ship_merge_table_keeps_merge_commits(self):
+    def test_ship_prefers_merge_commits_and_falls_back(self):
         text = (self.SHIP / "SKILL.md").read_text(encoding="utf-8")
-        self.assertNotIn("--squash", text)
-        self.assertIn("gh pr merge {number} --merge --delete-branch", text)
+        self.assertIn("gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed", text)
+        merge, squash, rebase = (text.index("gh pr merge {number} --%s --delete-branch" % m)
+                                 for m in ("merge", "squash", "rebase"))
+        self.assertLess(merge, squash)
+        self.assertLess(squash, rebase)
+        self.assertRegex(text, r"`glab mr merge[^`]*`.*GitLab project's own merge (method|setting)")
+        self.assertRegex(text, r"(?i)first-parent.*every (merge )?method")
 
 
 class PrepareReleaseTest(unittest.TestCase):

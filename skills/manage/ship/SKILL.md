@@ -85,13 +85,15 @@ git commit -m "chore: CHANGELOG for {{ISSUE_PREFIX}}-XX"
 git push
 ```
 
-Then merge the PR/MR on your Git host:
+Then merge the PR/MR on your Git host. Prefer a merge commit; use another method only when the repository does not allow it.
 
 | Host | Command |
 |---|---|
-| GitHub | `gh pr merge {number} --merge --delete-branch` |
-| GitLab | `glab mr merge {iid} --remove-source-branch` |
+| GitHub | Check which methods the repository allows with `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`, then use the first allowed one: `gh pr merge {number} --merge --delete-branch`, else `gh pr merge {number} --squash --delete-branch`, else `gh pr merge {number} --rebase --delete-branch`. |
+| GitLab | `glab mr merge {iid} --remove-source-branch`: it follows the GitLab project's own merge method setting. |
 | Bitbucket | merge via Bitbucket REST API or UI |
+
+The merge method does not affect releases: `/prepare-release` finds the release commit with a first-parent lookup, which works with every merge method.
 
 ### 6. Report back
 
