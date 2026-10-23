@@ -23,6 +23,7 @@ A record of all versioned releases. For planned work and known issues, see @docs
 - HAB-278 WU21: skill_router fixes (warn when skill_router.toml unreadable without tomllib; exit 2 when a context provider lacks fetch_context/format_context), AGENTS.md session start reads [providers].pm ({{ISSUE_PREFIX}}-N = GitHub issue #N with github), skill_router tests run in their own CI job on 3.9/3.12 (PR #26) [wip]
 - #42: /onboard asks for analytics, logging and feature-flag tools ([tools] in skill_router.toml; none is a recorded answer; /analyze, FEATURE 1.4 and checkup act on it) (PR #43) [meta]
 - #44 WU1: changelog.py lint/unreleased/propose with opt-in format marker; /ship writes marked lines and no longer bumps (PR #48) [wip]
+- #44 WU2: /prepare-release skill; [release] config; changelog.py cut/notes/latest; /ship merge-method fallback (PR #49) [meta]
 
 ---
 
